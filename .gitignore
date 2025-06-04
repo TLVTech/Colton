@@ -1,0 +1,24 @@
+# 1) Operating-system or editor junk
+.DS_Store
+Thumbs.db
+
+# 2) Python environment & bytecode
+__pycache__/
+*.pyc
+.venv/
+venv/
+env/
+
+# 3) Output folders & ZIPs
+results/
+myresults/
+results_Jasper_*_coltonmkt.zip
+
+# 4) Data exports or raw data you don’t want in Git
+/data/raw/
+/data/exports/
+/data/bubble_exports/
+/images/
+
+# 5) Any local credentials file
+*.env

@@ -1,0 +1,10 @@
+# Colton project dependencies
+beautifulsoup4
+brotli
+cairosvg
+gdown
+openai
+Pillow
+pandas
+requests
+urllib3
