@@ -1,24 +1,25 @@
-# 1) Operating-system or editor junk
-.DS_Store
-Thumbs.db
-
-# 2) Python environment & bytecode
+# Python cache
 __pycache__/
-*.pyc
+*.py[cod]
+*.egg-info/
+
+# Virtual environment folder
 .venv/
 venv/
-env/
 
-# 3) Output folders & ZIPs
+# Results / output data (will be generated at runtime)
 results/
 myresults/
-results_Jasper_*_coltonmkt.zip
 
-# 4) Data exports or raw data you don’t want in Git
-/data/raw/
-/data/exports/
-/data/bubble_exports/
-/images/
+# Temporary images
+temp_images/
 
-# 5) Any local credentials file
-*.env
+# Any zip packages
+*.zip
+
+# Environment file (API keys, secrets)
+.env
+
+# VS Code / JetBrains project files (optional)
+.vscode/
+.idea/
