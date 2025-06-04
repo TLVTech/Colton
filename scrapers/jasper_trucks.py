@@ -1,5 +1,5 @@
 # Colton/scrapers/jasper_trucks.py
-
+# works fine !
 # -*- coding: utf-8 -*-
 import sys
 sys.stdout.reconfigure(encoding="utf-8")
