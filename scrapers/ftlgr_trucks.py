@@ -1,6 +1,15 @@
 # scrapers/ftlgr.py
 
-#Issue with: FTLGR server is actively refusing our scrape request
+# ── Why we set “browser-like” headers and use a single Session ──────────────────
+# Many sites (like FTLGR) block basic requests without full browser headers,
+# returning HTTP 403 Forbidden. By supplying standard headers—User-Agent,
+# Accept, Accept-Language, Referer, Origin, Connection—we more closely mimic
+# a real browser. Wrapping everything in one requests.Session() lets us persist
+# cookies and headers across paginated requests. This dramatically reduces
+# “403 Forbidden” errors and ensures pagination and detail-page fetches succeed.
+
+
+
 
 
 import os
