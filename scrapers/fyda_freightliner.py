@@ -1,6 +1,6 @@
 # fyda_freightliner.py
 
-# having issues with scraping the vehicle info
+# having issues with scraping the vehicle info because of Verify the exact HTML/CSS on the real page
 
 import os
 import re

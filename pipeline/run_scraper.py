@@ -52,11 +52,14 @@ if __name__ == "__main__":
         print(f"[run_scraper] Adding {len(ftlgr)} FTLGR URLs.")
         urls.extend([("ftlgr", u) for u in ftlgr])
 
-    # ── FYDA Freightliner
+# ── FYDA Freightliner
     if args.source in ("fyda", "all"):
-        fyda = get_fyda_listings(limit=args.limit)
-        print(f"[run_scraper] Adding {len(fyda)} FYDA URLs.")
-        urls.extend([("fyda", u) for u in fyda])
+        fyda_urls = get_fyda_listings()                     # no 'limit' argument
+        if args.limit is not None:
+            fyda_urls = fyda_urls[: args.limit]
+        print(f"[run_scraper] Adding {len(fyda_urls)} FYDA URLs.")
+        urls.extend([("fyda", u) for u in fyda_urls])
+
 
     # ── Shanes Equipment
     if args.source in ("shanes_equipment", "all"):
