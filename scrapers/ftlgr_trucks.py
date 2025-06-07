@@ -1,4 +1,4 @@
-# scrapers/ftlgr.py
+# scrapers/ftlgr_trucks.py
 
 # ── Why we set “browser-like” headers and use a single Session ──────────────────
 # Many sites (like FTLGR) block basic requests without full browser headers,
@@ -8,6 +8,18 @@
 # cookies and headers across paginated requests. This dramatically reduces
 # “403 Forbidden” errors and ensures pagination and detail-page fetches succeed.
 
+"""
+FTLGR Trucks Scraper – Attempted Selenium Fallback
+
+I added a Selenium-based pagination fallback to bypass persistent 403 Forbidden errors from the
+standard requests approach. This version:
+  • Launches headless Chrome with realistic browser headers
+  • Waits for listing elements to load before extracting links
+  • Clicks the “Next” button until no more pages are found
+
+Unfortunately, the Selenium approach did not yield any listings, so we’re reverting to the original
+HTTP requests–based implementation for now. Moving on to test the next scraper.
+"""
 
 
 
