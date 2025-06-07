@@ -1,10 +1,14 @@
-# Colton project dependencies
+# Colton Project Requirements
 beautifulsoup4
 brotli
 cairosvg
 gdown
-openai
+openai==0.28.1
 Pillow
 pandas
 requests
 urllib3
+selenium
+webdriver-manager
+python-dotenv
+lxml
