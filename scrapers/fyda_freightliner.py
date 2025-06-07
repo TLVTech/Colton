@@ -396,12 +396,12 @@ def write_failed_url(url):
 
 
 #
-# ── 7) Given a detail‐page URL, fetch its visible text via Selenium/BeautifulSoup
+# ── Revised get_vehicle_page_html (patch to replace old version) ──
 #
 def get_vehicle_page_html(url):
     """
-    Load `url` with Selenium, wait for .detail-wrapper to appear, and return its text.
-    Handle CAPTCHA page titled "Pardon Our Interruption" by pausing for manual solve.
+    Load `url` with Selenium, wait for <div id="template"> to appear, and return its text.
+    If blocked by CAPTCHA (“Pardon Our Interruption”), pause for manual solve.
     """
     driver = None
     try:
@@ -409,7 +409,7 @@ def get_vehicle_page_html(url):
         driver.get(url)
         time.sleep(5)
 
-        # If we hit CAPTCHA block:
+        # CAPTCHA check:
         if "Pardon Our Interruption" in driver.page_source:
             print("\nCAPTCHA detected at", url)
             print("Please solve it in the browser window, then press Enter here…")
@@ -422,23 +422,20 @@ def get_vehicle_page_html(url):
                 write_failed_url(url)
                 return ""
 
-        # Scroll to bottom to load lazy content
-        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-        time.sleep(3)
-
-        # Wait for .detail-wrapper to appear
+        # Wait for the <div id="template"> to load
         try:
             WebDriverWait(driver, 20).until(
-                EC.presence_of_element_located((By.CLASS_NAME, "detail-wrapper"))
+                EC.presence_of_element_located((By.ID, "template"))
             )
         except TimeoutException:
-            print("detail-wrapper not found on", url)
+            print("`<div id='template'>` not found on", url)
             return ""
 
-        time.sleep(1)
+        # Now extract all visible text under <div id="template">
         soup = BeautifulSoup(driver.page_source, "html.parser")
-        wrapper = soup.find("div", class_="detail-wrapper")
-        return wrapper.get_text(separator=" ", strip=True) if wrapper else ""
+        template_div = soup.find("div", id="template")
+        return template_div.get_text(separator=" ", strip=True) if template_div else ""
+
     except Exception as e:
         print("Error in get_vehicle_page_html:", e)
         return ""
