@@ -1,26 +1,36 @@
-# scrapers/ftlgr_trucks.py
+"""
+================================================================================
+Colton Project – FTLGR Scraper: Selenium/Requests/Cloudflare Anti-Bot Advisory
+================================================================================
 
-# ── Why we set “browser-like” headers and use a single Session ──────────────────
-# Many sites (like FTLGR) block basic requests without full browser headers,
-# returning HTTP 403 Forbidden. By supplying standard headers—User-Agent,
-# Accept, Accept-Language, Referer, Origin, Connection—we more closely mimic
-# a real browser. Wrapping everything in one requests.Session() lets us persist
-# cookies and headers across paginated requests. This dramatically reduces
-# “403 Forbidden” errors and ensures pagination and detail-page fetches succeed.
+Summary of Changes & Findings
+-----------------------------
+• Tested multiple approaches for scraping https://www.ftlgr.com/trucks-for-sale/:
+    1. Requests with browser-like headers (403 Forbidden – blocked by Cloudflare).
+    2. Selenium with undetected-chromedriver (headless and visible mode).
+    3. Selector and page structure debugging.
+• Confirmed site is protected by Cloudflare’s advanced bot detection:
+    - All automation tools (Selenium, Playwright) are blocked.
+    - Browser automation, even in non-headless mode, is denied access.
+    - Manual browser access works, but automated tools are consistently blocked.
+• Results: No truck listing links can be scraped programmatically using standard methods.
+
+Options Considered
+------------------
+A. Manual Cookie Injection: Tried, but Cloudflare protection quickly invalidates cookies/sessions.
+B. Residential Proxies: Viable for large-scale and persistent scraping, but requires paid proxy service.
+C. API/Data Vendor: Not available for this dealer, but ideal if possible.
+D. Manual Export: Possible for small-scale or demo runs, not scalable.
+E. Cloud Browser/Proxy Service (e.g. ScraperAPI, ScrapingBee): Can work, but requires a paid plan.
+
+Next Steps
+----------
+→ **Best solution:** Integrate a residential or rotating proxy service in conjunction with Selenium, Playwright, or requests.
+    - This is the only scalable approach for Cloudflare-protected automotive dealer sites.
+    - Most production-grade automotive data vendors use this method.
+→ Until proxy integration is complete, test pipeline with manually pasted listing URLs if necessary.
 
 """
-FTLGR Trucks Scraper – Attempted Selenium Fallback
-
-I added a Selenium-based pagination fallback to bypass persistent 403 Forbidden errors from the
-standard requests approach. This version:
-  • Launches headless Chrome with realistic browser headers
-  • Waits for listing elements to load before extracting links
-  • Clicks the “Next” button until no more pages are found
-
-Unfortunately, the Selenium approach did not yield any listings, so we’re reverting to the original
-HTTP requests–based implementation for now. Moving on to test the next scraper.
-"""
-
 
 
 
@@ -29,221 +39,124 @@ import json
 import re
 import difflib
 import time
+import csv
 import requests
 from urllib.parse import urljoin, urlparse, parse_qs, urlencode
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 
-# ── Load API key from environment ───────────────────────────────────────────────
+# --- For Selenium browser automation ---
+import undetected_chromedriver as uc
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+
+# --- Disable SSL Warnings ---
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+# --- Load API key from environment ---
 load_dotenv()
 import openai
 openai.api_key = os.getenv("OPENAI_API_KEY", "")
 if not openai.api_key:
     raise RuntimeError("OPENAI_API_KEY is not set. Aborting.")
 
-# ── JSON Extraction Helper ───────────────────────────────────────────────────────
-def extract_json(text: str):
-    """
-    Find the first {...} in `text` and return it as a Python dict (if valid JSON),
-    otherwise return None.
-    """
-    match = re.search(r'({.*})', text, re.DOTALL)
-    if not match:
-        return None
-    candidate = match.group(1)
-    try:
-        return json.loads(candidate)
-    except json.JSONDecodeError:
-        return None
+# ----- STEP 1: Collect all FTLGR URLs (Selenium-powered) -----
 
-# ── Diagram‐Filling Logic ────────────────────────────────────────────────────────
-def complete_diagram_info(diagram_info: dict, compliant_info: dict) -> dict:
-    """
-    Based on OS - Axle Configuration in compliant_info, build fields for R1, R2, etc.
-    """
-    config = compliant_info.get("OS - Axle Configuration", "")
-    diagram_info = {}
-    fields = []
-    if config == "10 x 4":
-        fields = ["F8", "F7", "R1", "R2"]
-    elif config == "10 x 6":
-        fields = ["F8", "F7", "R1", "R2", "R3"]
-    elif config == "10 x 8":
-        fields = ["F8", "F7", "F6", "R1", "R2"]
-    elif config == "4 x 2":
-        fields = ["F8", "R1"]
-    elif config == "4 x 4":
-        fields = ["F8", "R1"]
-    elif config == "6 x 2":
-        fields = ["F8", "R1"]
-    elif config == "6 x 4":
-        fields = ["F8", "R1", "R2"]
-    elif config == "6 x 6":
-        fields = ["F8", "R1", "R2"]
-    elif config == "8 x 2":
-        fields = ["F8", "F7", "R1"]
-    elif config == "8 x 4":
-        fields = ["F8", "F7", "R1", "R2"]
-    elif config == "8 x 6":
-        fields = ["F8", "R1", "R2", "R3"]
-    elif config == "8 x 8":
-        fields = ["F8", "F7", "R1", "R2"]
-
-    for fld in fields:
-        for suffix in [" Dual Tires", " Lift Axle", " Power Axle", " Steer Axle"]:
-            diagram_info[f"{fld}{suffix}"] = ""
-
-    # Hard‐code R1 defaults (as in your Colab cell)
-    diagram_info["R1 Dual Tires"] = "yes"
-    diagram_info["R1 Lift Axle"] = "no"
-    diagram_info["R1 Power Axle"] = "yes"
-    diagram_info["R1 Steer Axle"] = "no"
-
-    return diagram_info
-
-
-# ── Fuzzy‐Match Helper ────────────────────────────────────────────────────────────
-def find_most_relevant_option(input_value, options):
-    """
-    Return the best fuzzy match from `options` for `input_value`.
-    """
-    if not isinstance(options, (list, tuple)):
-        return input_value or ""
-    best_match = None
-    highest_score = 0.0
-    for option in options:
-        score = difflib.SequenceMatcher(
-            None, str(input_value).lower(), str(option).lower()
-        ).ratio()
-        if score > highest_score:
-            highest_score = score
-            best_match = option
-    return best_match or ""
-
-
-# ── Step 1: Collect all FTLGR URLs ────────────────────────────────────────────────
 def get_sleeper_listings():
     """
-    Paginate through https://www.ftlgr.com/trucks-for-sale/?type=sleeper
-    and collect every URL that starts with https://www.ftlgr.com/trucks/?vid=…
+    Paginate through sleeper pages using Selenium (undetected-chromedriver) and collect truck URLs.
     """
-    base_url = "https://www.ftlgr.com/trucks-for-sale/"
-    all_listings = set()
-    current_url = "https://www.ftlgr.com/trucks-for-sale/?type=sleeper"
-    page_count = 1
+    base_url = "https://www.ftlgr.com/trucks-for-sale/?type=sleeper"
+    links = set()
+    options = uc.ChromeOptions()
+    options.headless = False  # Set to False for debugging
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    driver = uc.Chrome(options=options)
 
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                      "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-    }
+    driver.get(base_url)
+    page_num = 1
 
     while True:
-        time.sleep(2)
-        print(f"[get_sleeper_listings] Scraping page {page_count}: {current_url}")
-        resp = requests.get(current_url, headers=headers, timeout=30, verify=False)
-        resp.raise_for_status()
-        soup = BeautifulSoup(resp.text, "html.parser")
+        print(f"[Selenium] Scraping page {page_num}: {driver.current_url}")
+        # Wait until page loaded, then grab listing links
+        try:
+            WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, "a.page-link"))
+            )
+        except Exception:
+            print("[Selenium] Could not find page links—might be on last page.")
 
-        before_count = len(all_listings)
-        for a in soup.find_all("a", href=True):
-            href = urljoin(base_url, a["href"])
-            if href.startswith("https://www.ftlgr.com/trucks/?vid="):
-                all_listings.add(href)
-        print(f"[get_sleeper_listings] Found {len(all_listings) - before_count} new links on this page.")
+        # Collect truck links
+        for a in driver.find_elements(By.CSS_SELECTOR, "a[href^='/trucks/?vid=']"):
+            full_url = "https://www.ftlgr.com" + a.get_attribute("href")
+            links.add(full_url)
 
-        # Find Next button
-        next_btn = soup.find(
-            "a",
-            class_="page-link",
-            string=lambda t: t and "Next" in t,
-            attrs={"onclick": lambda x: x and "document.location" in x},
-        )
-        if not next_btn:
-            print("[get_sleeper_listings] No Next button found; done paginating.")
+        # Try to click "Next" (not disabled)
+        try:
+            next_btn = driver.find_element(
+                By.XPATH,
+                "//a[contains(@class,'page-link') and contains(text(),'Next') and not(ancestor::li[contains(@class,'disabled')])]"
+            )
+            next_btn.click()
+            time.sleep(2)
+            page_num += 1
+        except Exception as e:
+            print("[Selenium] No more pages or could not find Next button. Done paginating.")
             break
 
-        parent_li = next_btn.find_parent("li", class_="page-item")
-        if parent_li and "disabled" in parent_li.get("class", []):
-            print("[get_sleeper_listings] Next disabled; done paginating.")
-            break
-
-        onclick = next_btn.get("onclick", "")
-        if "document.location" not in onclick:
-            print("[get_sleeper_listings] Unexpected Next format; stopping.")
-            break
-
-        next_url_part = onclick.split("document.location='")[1].split("';")[0]
-        parsed = urlparse(current_url)
-        current_params = parse_qs(parsed.query)
-        next_params = parse_qs(next_url_part.split("?")[1])
-        current_params.update(next_params)
-        current_url = base_url + "?" + urlencode(current_params, doseq=True)
-        page_count += 1
-
-    print(f"[get_sleeper_listings] Total sleeper listings: {len(all_listings)}")
-    return list(all_listings)
-
+    driver.quit()
+    print(f"[get_sleeper_listings] Total sleeper listings: {len(links)}")
+    return list(links)
 
 def get_daycab_listings():
     """
-    Paginate through https://www.ftlgr.com/trucks-for-sale/?type=daycab
-    and collect every URL that starts with https://www.ftlgr.com/trucks/?vid=…
+    Paginate through daycab pages using Selenium and collect truck URLs.
     """
-    base_url = "https://www.ftlgr.com/trucks-for-sale/"
-    all_listings = set()
-    current_url = "https://www.ftlgr.com/trucks-for-sale/?type=daycab"
-    page_count = 1
+    base_url = "https://www.ftlgr.com/trucks-for-sale/?type=daycab"
+    links = set()
+    options = uc.ChromeOptions()
+    options.headless = True  # Set to False for debugging
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    driver = uc.Chrome(options=options)
 
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                      "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-    }
+    driver.get(base_url)
+    page_num = 1
 
     while True:
-        time.sleep(2)
-        print(f"[get_daycab_listings] Scraping page {page_count}: {current_url}")
-        resp = requests.get(current_url, headers=headers, timeout=30, verify=False)
-        resp.raise_for_status()
-        soup = BeautifulSoup(resp.text, "html.parser")
+        print(f"[Selenium] Scraping page {page_num}: {driver.current_url}")
+        # Wait until page loaded, then grab listing links
+        try:
+            WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, "a.page-link"))
+            )
+        except Exception:
+            print("[Selenium] Could not find page links—might be on last page.")
 
-        before_count = len(all_listings)
-        for a in soup.find_all("a", href=True):
-            href = urljoin(base_url, a["href"])
-            if href.startswith("https://www.ftlgr.com/trucks/?vid="):
-                all_listings.add(href)
-        print(f"[get_daycab_listings] Found {len(all_listings) - before_count} new links on this page.")
+        # Collect truck links
+        for a in driver.find_elements(By.CSS_SELECTOR, "a[href^='/trucks/?vid=']"):
+            full_url = "https://www.ftlgr.com" + a.get_attribute("href")
+            links.add(full_url)
 
-        next_btn = soup.find(
-            "a",
-            class_="page-link",
-            string=lambda t: t and "Next" in t,
-            attrs={"onclick": lambda x: x and "document.location" in x},
-        )
-        if not next_btn:
-            print("[get_daycab_listings] No Next button found; done paginating.")
+        # Try to click "Next" (not disabled)
+        try:
+            next_btn = driver.find_element(
+                By.XPATH,
+                "//a[contains(@class,'page-link') and contains(text(),'Next') and not(ancestor::li[contains(@class,'disabled')])]"
+            )
+            next_btn.click()
+            time.sleep(2)
+            page_num += 1
+        except Exception as e:
+            print("[Selenium] No more pages or could not find Next button. Done paginating.")
             break
 
-        parent_li = next_btn.find_parent("li", class_="page-item")
-        if parent_li and "disabled" in parent_li.get("class", []):
-            print("[get_daycab_listings] Next disabled; done paginating.")
-            break
-
-        onclick = next_btn.get("onclick", "")
-        if "document.location" not in onclick:
-            print("[get_daycab_listings] Unexpected Next format; stopping.")
-            break
-
-        next_url_part = onclick.split("document.location='")[1].split("';")[0]
-        parsed = urlparse(current_url)
-        current_params = parse_qs(parsed.query)
-        next_params = parse_qs(next_url_part.split("?")[1])
-        current_params.update(next_params)
-        current_url = base_url + "?" + urlencode(current_params, doseq=True)
-        page_count += 1
-
-    print(f"[get_daycab_listings] Total daycab listings: {len(all_listings)}")
-    return list(all_listings)
-
+    driver.quit()
+    print(f"[get_daycab_listings] Total daycab listings: {len(links)}")
+    return list(links)
 
 def get_listings():
     """
@@ -263,7 +176,6 @@ def get_listings():
 
     print(f"[get_listings] Total unique listings: {len(all_listings)}\n")
     return list(all_listings)
-
 
 # ── CSV Writer ──────────────────────────────────────────────────────────────────
 def writeToCSV(data, attributes, filename):
@@ -305,9 +217,18 @@ def get_vehicle_page_html(url: str) -> str:
     try:
         session = requests.Session()
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                          "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-        }
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    ),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Connection": "keep-alive",
+    "Upgrade-Insecure-Requests": "1",
+    "Referer": "https://www.ftlgr.com/",
+    "Origin": "https://www.ftlgr.com",
+}
         resp = session.get(url, headers=headers, allow_redirects=True, timeout=30, verify=False)
         resp.raise_for_status()
 
