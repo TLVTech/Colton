@@ -20,6 +20,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, WebDriverException
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
+from core.output import write_to_csv
 
 # watermark function (fallback if missing)
 try:
@@ -37,26 +38,6 @@ openai.api_key = os.getenv("OPENAI_API_KEY", "")
 if not openai.api_key:
     raise RuntimeError("OPENAI_API_KEY is not set in the environment. Aborting.")
 
-# --------------------------------------------------
-# 1) Utility: write data to CSV
-# --------------------------------------------------
-def writeToCSV(data, attributes, filename):
-    if isinstance(data, dict):
-        data = [data]
-    if not attributes:
-        attrs = set()
-        for row in data:
-            attrs.update(row.keys())
-        attributes = sorted(attrs)
-    os.makedirs(os.path.dirname(filename), exist_ok=True)
-    exists = os.path.exists(filename)
-    empty = not exists or os.path.getsize(filename) == 0
-    with open(filename, "a", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=attributes)
-        if empty:
-            writer.writeheader()
-        for row in data:
-            writer.writerow({k: row.get(k, "") for k in attributes})
 
 # --------------------------------------------------
 # 2) Fuzzy matching helper
@@ -550,8 +531,8 @@ if __name__=="__main__":
         data.update({"Listing":url, "Original info description":text})
         comp = make_extracted_info_compliant(data)
         comp["original_image_url"]=url
-        writeToCSV(comp, None, VEH)
-        writeToCSV( complete_diagram_info({"Listing":url}, comp), None, DIA)
+        write_to_csv(comp, None, VEH)
+        write_to_csv( complete_diagram_info({"Listing":url}, comp), None, DIA)
         # images
         imgs = download_images_from_fyda(url, RAW)
         if imgs:
@@ -587,8 +568,8 @@ def run(listing_url, veh_info_csv, diagram_csv, image_folder_root):
     comp["Listing"] = listing_url
 
     # 3) Write to CSVs
-    writeToCSV(comp, None, veh_info_csv)
-    writeToCSV(complete_diagram_info({"Listing": listing_url}, comp), None, diagram_csv)
+    write_to_csv(comp, None, veh_info_csv)
+    write_to_csv(complete_diagram_info({"Listing": listing_url}, comp), None, diagram_csv)
 
     # 4) Download images
     raw_dir = os.path.join(image_folder_root, "fyda_raw")

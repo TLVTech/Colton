@@ -4,17 +4,19 @@
 import sys
 sys.stdout.reconfigure(encoding="utf-8")
 # ── Imports ──────────────────────────────────────────────────────────────────────
-from dotenv import load_dotenv
 import os
+import csv
 import json
 import re
 import difflib
 import requests
-from bs4 import BeautifulSoup
-import csv
-from urllib.parse import urljoin
-
 import openai
+from bs4 import BeautifulSoup
+from dotenv import load_dotenv
+from urllib.parse import urljoin
+from core.output import write_to_csv
+from core.image_utils import extract_image_urls_from_page, download_images, watermark_images
+
 
 # ── Load API key from environment ───────────────────────────────────────────────
 load_dotenv()
@@ -203,34 +205,6 @@ def get_target_listings() -> list:
 
 
 # ── Step 2: Write generic CSV writer ──────────────────────────────────────────────
-def write_to_csv(data, attributes, filename):
-    """
-    Append a list of dicts (or single dict) to CSV `filename` using fieldnames=attributes.
-    """
-    if isinstance(data, dict):
-        data = [data]
-
-    # If no attributes provided, collect keys from all dicts
-    if not attributes:
-        attrs = set()
-        for row in data:
-            attrs.update(row.keys())
-        attributes = sorted(attrs)
-
-    parent = os.path.dirname(filename)
-    if parent:
-        os.makedirs(parent, exist_ok=True)
-
-    file_exists = os.path.exists(filename)
-    file_empty = (not file_exists) or (os.path.getsize(filename) == 0)
-
-    with open(filename, mode="a", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=attributes)
-        if file_empty:
-            writer.writeheader()
-        for row in data:
-            out_row = {attr: row.get(attr, "") for attr in attributes}
-            writer.writerow(out_row)
 
 
 # ── Step 3: Fetch and parse one vehicle page ───────────────────────────────────────
@@ -581,66 +555,6 @@ def make_extracted_info_compliant(extracted_info: dict) -> dict:
     return compliant
 
 
-# ── Step 6: Image Download Logic ─────────────────────────────────────────────────
-def download_images(url: str, folder_name: str) -> None:
-    """
-    Given the listing URL, parse <div id="photos"> for any "xl" images and save each as 1.jpg, 2.jpg, 
-    """
-    import os
-    from bs4 import BeautifulSoup
-    import requests
-    import re
-
-    os.makedirs(folder_name, exist_ok=True)
-    try:
-        resp = requests.get(url)
-        resp.raise_for_status()
-        soup = BeautifulSoup(resp.text, "html.parser")
-        photos_div = soup.find("div", id="photos")
-        if not photos_div:
-            print("No photos div found.")
-            return
-
-        image_urls = []
-        for el in photos_div.find_all(["img", "a"]):
-            if el.name == "img" and el.get("src") and "xl" in el["src"].lower():
-                image_urls.append(el["src"])
-            if el.name == "a" and el.get("href"):
-                href = el["href"]
-                if "javascript:" in href:
-                    matches = re.findall(r"'(https?://[^']+)'", href)
-                    for m in matches:
-                        if "xl" in m.lower():
-                            image_urls.append(m)
-                elif "xl" in href.lower():
-                    image_urls.append(href)
-        # remove duplicates, keep order
-        unique_urls = list(dict.fromkeys(image_urls))
-        for idx, img_url in enumerate(unique_urls, start=1):
-            try:
-                full_img_url = img_url if img_url.startswith(("http://", "https://")) else requests.compat.urljoin(url, img_url)
-                img_resp = requests.get(full_img_url)
-                img_resp.raise_for_status()
-                content_type = img_resp.headers.get("content-type", "")
-                if "jpeg" in content_type or "jpg" in content_type:
-                    ext = "jpg"
-                elif "png" in content_type:
-                    ext = "png"
-                else:
-                    ext = img_url.split(".")[-1].lower()
-                    if ext not in ("jpg", "jpeg", "png"):
-                        ext = "jpg"
-                file_path = os.path.join(folder_name, f"{idx}.{ext}")
-                with open(file_path, "wb") as f:
-                    f.write(img_resp.content)
-                print(f"Downloaded image {idx} → {file_path}")
-            except Exception as e:
-                print(f"Error downloading image {idx}: {e}")
-        print(f"Downloaded {len(unique_urls)} images to {folder_name}")
-    except Exception as e:
-        print(f"Error accessing {url}: {e}")
-
-
 # ── Step 7: "run()" orchestrator ───────────────────────────────────────────────
 def run(
     listing_url: str,
@@ -803,13 +717,16 @@ def run(
     # Download images into e.g. "results/images/<Stock Number>/"
     stock = str(compliant.get("Stock Number", "")).strip()
     if stock:
-        target_folder = os.path.join(image_folder_root, stock)
-        download_images(listing_url, target_folder)
-        # Watermark them
-        watermark_path = os.path.join("data", "raw", "group.png")
-        watermarked_folder = f"{target_folder}-watermarked"
-        from core.watermark import process_folder_watermark
+        dest = os.path.join(image_folder_root, stock)
 
-        process_folder_watermark(target_folder, watermarked_folder, watermark_path)
+        # 1) Extract image URLs from the listing page
+        image_urls = extract_image_urls_from_page(listing_url)
+
+        # 2) Download images into dest folder
+        raw_paths = download_images(image_urls, dest)
+
+        # 3) Apply watermark to each downloaded image
+        watermark_images(raw_paths, f"{dest}-watermarked", "data/raw/group.png")
+
     else:
         print("No Stock Number; skipping images & watermark.")
