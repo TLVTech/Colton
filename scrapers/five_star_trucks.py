@@ -11,6 +11,7 @@ import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse, parse_qs, urlencode
 import openai
+from core.output import write_to_csv
 
 # ── Configuration ───────────────────────────────────────────────────────────────
 # (Pull OPENAI_API_KEY from .env via dotenv if you wish, or rely on environment variable.)
@@ -371,34 +372,6 @@ def download_gallery_images(url: str, folder_name: str) -> None:
         print(f"[download_gallery_images] Error accessing {url}: {e}")
 
 
-# ── (G) 7) Generic CSV writer ───────────────────────────────────────────────────
-def write_to_csv(data, attributes, filename):
-    """
-    Exactly like Jasper’s: append a dict or list of dicts to CSV, creating folder if needed.
-    """
-    if isinstance(data, dict):
-        data = [data]
-
-    if not attributes:
-        attrs = set()
-        for row in data:
-            attrs.update(row.keys())
-        attributes = sorted(attrs)
-
-    parent = os.path.dirname(filename)
-    if parent:
-        os.makedirs(parent, exist_ok=True)
-
-    file_exists = os.path.exists(filename)
-    file_empty = (not file_exists) or (os.path.getsize(filename) == 0)
-
-    with open(filename, mode="a", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=attributes)
-        if file_empty:
-            writer.writeheader()
-        for row in data:
-            out_row = {attr: row.get(attr, "") for attr in attributes}
-            writer.writerow(out_row)
 
 
 # ── (H) 8) run() orchestrator ───────────────────────────────────────────────────
