@@ -1,108 +1,221 @@
-# tests/fyda_selenium_test.py
-
+import os
+import sys
 import time
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
+import requests
 
-def get_target_listings_via_selenium(category_url, max_pages=10):
+# -- Ensure project modules are discoverable
+sys.path.insert(0, os.path.abspath("."))
+
+from scrapers.fyda_freightliner import (
+    get_target_listings,
+    get_vehicle_page_html,
+    extract_vehicle_info,
+    make_extracted_info_compliant,
+    complete_diagram_info,
+    writeToCSV,
+)
+from core.watermark import add_watermark
+
+# --- SETTINGS ---
+WATERMARK_PATH = "data/raw/group.png"
+IMAGES_RAW_DIR = "results/images/fyda_raw"
+IMAGES_WM_DIR = "results/images/fyda"
+RESULTS_DIR = "results"
+VEH_CSV = os.path.join(RESULTS_DIR, "vehicleinfo.csv")
+DIAG_CSV = os.path.join(RESULTS_DIR, "diagram.csv")
+
+
+def download_images_from_fyda(detail_url, dest_folder, page_html=None):
     """
-    Load category_url (e.g. the 'sleeper' inventory) with Selenium,
-    wait for .vehicle_row elements, collect all <a href="…"> inside each,
-    then click “Next” until no more pages (or max_pages), and return a list
-    of absolute detail‐page URLs.
+    Scrapes images from FYDA truck detail page — now handles background-image divs.
     """
+    from selenium import webdriver
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.chrome.service import Service
+    from webdriver_manager.chrome import ChromeDriverManager
+    import re
+
     chrome_opts = webdriver.ChromeOptions()
     chrome_opts.add_argument("--no-sandbox")
     chrome_opts.add_argument("--disable-dev-shm-usage")
     chrome_opts.add_argument("--disable-gpu")
-    # If you want to run in headless mode (no browser window), uncomment below:
-    # chrome_opts.add_argument("--headless")
     chrome_opts.add_argument("--window-size=1920,1080")
-
     service = Service(ChromeDriverManager().install())
     driver = webdriver.Chrome(service=service, options=chrome_opts)
     driver.set_page_load_timeout(30)
 
-    all_urls = []
+    os.makedirs(dest_folder, exist_ok=True)
+    img_urls = []
     try:
-        driver.get(category_url)
-        # Give the page a few seconds to run its initial JavaScript
+        driver.get(detail_url)
         time.sleep(5)
 
-        for page_num in range(1, max_pages + 1):
+        # Find divs with background-image
+        bg_divs = driver.find_elements(By.CSS_SELECTOR, "div.background-image")
+        for div in bg_divs:
+            style = div.get_attribute("style")
+            if style:
+                match = re.search(r'background-image:\s*url\((.*?)\)', style)
+                if match:
+                    img_url = match.group(1).strip('\'"')
+                    img_urls.append(img_url)
+
+        print(f"Found {len(img_urls)} truck images in background-image divs.")
+
+        # Download images
+        saved = []
+        for idx, url in enumerate(set(img_urls), 1):
+            ext = os.path.splitext(url.split("?")[0])[1] or ".jpg"
+            fname = os.path.join(dest_folder, f"fyda_{idx}{ext}")
             try:
-                # Wait until at least one <div class="vehicle_row"> appears
-                WebDriverWait(driver, 15).until(
-                    EC.presence_of_element_located((By.CSS_SELECTOR, "div.vehicle_row"))
-                )
-            except Exception:
-                print(f"[selenium] No .vehicle_row found on page {page_num}, stopping.")
-                break
+                r = requests.get(url, timeout=10)
+                with open(fname, "wb") as f:
+                    f.write(r.content)
+                saved.append(fname)
+                print(f"Downloaded {url} -> {fname}")
+            except Exception as e:
+                print(f"Failed to download {url}: {e}")
+        driver.quit()
+        return saved
+    except Exception as e:
+        print("Error (download_images_from_fyda):", e)
+        try: driver.quit()
+        except: pass
+        return []
+    """
+    Downloads gallery images from a truck detail page.
+    Filters out logos and icons.
+    """
+    from selenium import webdriver
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.chrome.service import Service
+    from webdriver_manager.chrome import ChromeDriverManager
 
-            # Scroll down to force any lazy‐loading
-            driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-            time.sleep(2)
+    chrome_opts = webdriver.ChromeOptions()
+    chrome_opts.add_argument("--no-sandbox")
+    chrome_opts.add_argument("--disable-dev-shm-usage")
+    chrome_opts.add_argument("--disable-gpu")
+    chrome_opts.add_argument("--window-size=1920,1080")
+    service = Service(ChromeDriverManager().install())
+    driver = webdriver.Chrome(service=service, options=chrome_opts)
+    driver.set_page_load_timeout(30)
 
-            # Grab all the <div class="vehicle_row"> elements on this page
-            rows = driver.find_elements(By.CSS_SELECTOR, "div.vehicle_row")
-            if not rows:
-                print(f"[selenium] Zero .vehicle_row elements on page {page_num}.")
-                break
+    os.makedirs(dest_folder, exist_ok=True)
+    img_urls = []
 
-            for r in rows:
-                try:
-                    link = r.find_element(By.TAG_NAME, "a")
-                    href = link.get_attribute("href")
-                    if href:
-                        # Turn relative URLs into absolute
-                        if href.startswith("/"):
-                            href = "https://www.fydafreightliner.com" + href
-                        all_urls.append(href)
-                except Exception:
-                    # If there’s no <a> or some error, skip it
-                    continue
+    try:
+        driver.get(detail_url)
+        time.sleep(5)
 
-            print(f"[selenium] Page {page_num}: found {len(rows)} rows, "
-                  f"{len(all_urls)} total URLs so far.")
+        # Try targeted selectors for gallery images
+        img_elems = driver.find_elements(By.CSS_SELECTOR, "div.galleryImages img")
+        if not img_elems:
+            img_elems = driver.find_elements(By.CSS_SELECTOR, "div.slick-slide img")
+        if not img_elems:
+            img_elems = driver.find_elements(By.TAG_NAME, "img")
 
-            # Try to click the “Next” button
+        for img in img_elems:
+            src = img.get_attribute("src")
+            if (
+                src
+                and src.startswith("http")
+                and ("inventory" in src or "trucks" in src)
+                and not src.lower().endswith(".svg")
+            ):
+                img_urls.append(src)
+
+        print(f"Found {len(img_urls)} images in gallery.")
+
+        saved = []
+        for idx, url in enumerate(set(img_urls), 1):
+            ext = os.path.splitext(url.split("?")[0])[1] or ".jpg"
+            fname = os.path.join(dest_folder, f"fyda_{idx}{ext}")
             try:
-                next_btn = driver.find_element(By.CSS_SELECTOR, "button.pageButton.next")
-                # If it’s disabled, break out
-                if next_btn.get_attribute("disabled") or not next_btn.is_enabled():
-                    print("[selenium] Next button is disabled → last page reached.")
-                    break
+                r = requests.get(url, timeout=10)
+                with open(fname, "wb") as f:
+                    f.write(r.content)
+                saved.append(fname)
+                print(f"Downloaded {url} -> {fname}")
+            except Exception as e:
+                print(f"Failed to download {url}: {e}")
+        return saved
 
-                next_btn.click()
-                time.sleep(5)  # wait for JS to load the next set of rows
-            except Exception:
-                print("[selenium] Could not click Next button (last page?).")
-                break
-
-        # Deduplicate while preserving order
-        seen = set()
-        deduped = []
-        for u in all_urls:
-            if u not in seen:
-                seen.add(u)
-                deduped.append(u)
-        return deduped
+    except Exception as e:
+        print("Error (download_images_from_fyda):", e)
+        return []
 
     finally:
-        driver.quit()
+        try:
+            driver.quit()
+        except:
+            pass
+
+
+def watermark_images(input_files, output_dir, watermark_path):
+    os.makedirs(output_dir, exist_ok=True)
+    for f in input_files:
+        try:
+            fname = os.path.basename(f)
+            outpath = os.path.join(output_dir, fname)
+            add_watermark(f, watermark_path, outpath)
+            print(f"Watermarked {f} -> {outpath}")
+        except Exception as e:
+            print(f"Failed to watermark {f}: {e}")
+
+
+def test_fyda_full_flow():
+    os.makedirs(RESULTS_DIR, exist_ok=True)
+
+    # Step 1: Get truck detail URLs (test with first one)
+    category_url = (
+        "https://www.fydafreightliner.com/commercial-trucks-vans-for-sale-ky-oh-pa--xNewInventory"
+        "#page=xNewInventory&vc=sleeper"
+    )
+    detail_urls, _ = get_target_listings(category_url)
+    if not detail_urls:
+        print("No detail URLs found!")
+        return
+
+    url = detail_urls[0]
+    print(f"\nTesting with: {url}\n")
+
+    # Step 2: Extract vehicle page HTML
+    html = get_vehicle_page_html(url)
+    if not html:
+        print("Failed to get vehicle HTML/text.")
+        return
+
+    # Step 3: Extract vehicle info using OpenAI
+    extracted = extract_vehicle_info(html)
+    if not extracted:
+        print("OpenAI extraction failed.")
+        return
+    extracted["Listing"] = url
+    extracted["Original info description"] = html
+
+    compliant = make_extracted_info_compliant(extracted)
+    compliant["original_image_url"] = url
+
+    # Step 4: Write vehicle info to CSV
+    writeToCSV(compliant, None, VEH_CSV)
+
+    # Step 5: Write diagram row
+    diag = {"Listing": url}
+    diag_filled = complete_diagram_info(diag, compliant)
+    writeToCSV(diag_filled, None, DIAG_CSV)
+    print(f"Vehicle info/diagram rows written for {url}")
+
+    # Step 6: Download truck images
+    downloaded_files = download_images_from_fyda(url, IMAGES_RAW_DIR)
+    if not downloaded_files:
+        print("No truck images downloaded, skipping watermark step.")
+        return
+
+    # Step 7: Watermark images
+    watermark_images(downloaded_files, IMAGES_WM_DIR, WATERMARK_PATH)
+    print("Watermarking done.")
 
 
 if __name__ == "__main__":
-    sleeper_url = (
-        "https://www.fydafreightliner.com/"
-        "commercial-trucks-vans-for-sale-ky-oh-pa--xNewInventory"
-        "#page=xNewInventory&vc=sleeper"
-    )
-    urls = get_target_listings_via_selenium(sleeper_url)
-    print("\n=== Final detail URLs found:", len(urls), "===\n")
-    for idx, u in enumerate(urls, 1):
-        print(f"{idx:>2}. {u}")
+    test_fyda_full_flow()
+    print("\nFYDA full test complete.")

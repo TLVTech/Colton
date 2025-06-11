@@ -34,7 +34,7 @@ def main():
     today = datetime.now().strftime("%Y-%m-%d")
 
     # 2) Name of our output ZIP file:
-    zip_filename = f"results_Jasper_{today}_coltonmkt.zip"
+    zip_filename = f"scrapers_results_{today}_coltonmkt.zip"
 
     # 3) Check that “results/” and “myresults/” both exist
     if not os.path.isdir("results"):
