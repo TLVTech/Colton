@@ -1,7 +1,5 @@
 # fyda_freightliner.py
 
-# having issues with scraping the vehicle info because of Verify the exact HTML/CSS on the real page
-
 import os
 import re
 import json
@@ -23,68 +21,60 @@ from selenium.common.exceptions import TimeoutException, WebDriverException
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 
-#
-# ── 0) Initialize OpenAI client from .env
-#
+# watermark function (fallback if missing)
+try:
+    from core.watermark import add_watermark
+except ImportError:
+    print("Warning: core.watermark not found → skipping watermarking.")
+    def add_watermark(input_path, watermark_path, output_path):
+        print(f"Skipped watermark: {input_path}")
+
+# --------------------------------------------------
+# 0) Initialize OpenAI client from .env
+# --------------------------------------------------
 load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY", "")
 if not openai.api_key:
     raise RuntimeError("OPENAI_API_KEY is not set in the environment. Aborting.")
 
-#
-# ── 1) Utility: write a list of dicts (or single dict) to CSV
-#
+# --------------------------------------------------
+# 1) Utility: write data to CSV
+# --------------------------------------------------
 def writeToCSV(data, attributes, filename):
-    """
-    Append `data` (a dict or list-of-dicts) into `filename` as CSV rows.
-    If `attributes` is None or empty, collect fieldnames from all keys in `data`.
-    """
     if isinstance(data, dict):
         data = [data]
-
     if not attributes:
         attrs = set()
         for row in data:
             attrs.update(row.keys())
         attributes = sorted(attrs)
-
-    parent = os.path.dirname(filename)
-    if parent:
-        os.makedirs(parent, exist_ok=True)
-
-    file_exists = os.path.exists(filename)
-    file_empty = (not file_exists) or (os.path.getsize(filename) == 0)
-
-    with open(filename, mode="a", newline="", encoding="utf-8") as f:
+    os.makedirs(os.path.dirname(filename), exist_ok=True)
+    exists = os.path.exists(filename)
+    empty = not exists or os.path.getsize(filename) == 0
+    with open(filename, "a", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=attributes)
-        if file_empty:
+        if empty:
             writer.writeheader()
         for row in data:
-            out = {k: row.get(k, "") for k in attributes}
-            writer.writerow(out)
+            writer.writerow({k: row.get(k, "") for k in attributes})
 
-
-#
-# ── 2) Fuzzy‐matching helper
-#
-def find_most_relevant_option(input_value, options):
-    """
-    Return the single best fuzzy‐match from `options` for `input_value`.
-    """
-    if input_value is None:
+# --------------------------------------------------
+# 2) Fuzzy matching helper
+# --------------------------------------------------
+def find_most_relevant_option(val, options):
+    if val is None:
         return ""
-    value = str(input_value).lower()
-    best_match, best_score = "", 0.0
+    v = str(val).lower()
+    best, score = "", 0.0
     for opt in options:
-        score = difflib.SequenceMatcher(None, value, str(opt).lower()).ratio()
-        if score > best_score:
-            best_score, best_match = score, opt
-    return best_match if best_score > 0.0 else ""
+        s = difflib.SequenceMatcher(None, v, str(opt).lower()).ratio()
+        if s > score:
+            score, best = s, opt
+    return best
 
-
-#
-# ── 3) Build the ChatGPT extraction prompt + parse JSON
-#
+# --------------------------------------------------
+# 3) ChatGPT extraction prompt
+# --------------------------------------------------
 def extract_vehicle_info(text):
     """
     Send `text` to OpenAI, asking it to extract all required fields.
@@ -137,7 +127,10 @@ Set "Not Active" = 1.
 The field "Unique id" should always be "".
 """
         },
-        {"role": "user", "content": f"Extract vehicle information from this text: {text}"}
+        {
+            "role": "user",
+            "content": f"Extract vehicle information from this text: {text}"
+        }
     ]
 
     try:
@@ -147,17 +140,17 @@ The field "Unique id" should always be "".
             temperature=0.1,
             max_tokens=1000
         )
-        content = resp.choices[0].message.content
-        parsed = json.loads(content)
-        return parsed
+        raw = resp.choices[0].message.content
+        print("RAW GPT→JSON (first 200 chars):", raw[:200].replace("\n", " "), "…")
+        data = json.loads(raw)
+        return data
     except Exception as e:
         print("Warning: failed to parse vehicle‐info JSON:", e)
         return None
 
-
-#
-# ── 4) Enforce field‐type / allowed‐value constraints
-#
+# --------------------------------------------------
+# 4) Normalize extracted info
+# --------------------------------------------------
 def make_extracted_info_compliant(extracted_info):
     """
     Coerce each field in `extracted_info` to the correct type or allowed set.
@@ -259,13 +252,13 @@ def make_extracted_info_compliant(extracted_info):
             return find_most_relevant_option(v, opts)
 
         if constraint == "OS - Number of Front Axles":
-            return 1  # Always 1
+            return 1
 
         if constraint == "OS - Number of Fuel Tanks":
-            return ""  # no data, leave blank
+            return ""
 
         if constraint == "OS - Number of Rear Axles":
-            return v  # temporarily return raw; override below
+            return v  # override later based on config
 
         if constraint == "OS - Sleeper or Day Cab":
             return find_most_relevant_option(v, ["Day Cab", "Sleeper Cab"])
@@ -278,9 +271,11 @@ def make_extracted_info_compliant(extracted_info):
         if constraint == "OS - Transmission Speeds":
             if v.isdigit():
                 return f"{v}-speed"
-            return find_most_relevant_option(v, ["2-speed","3-speed","4-speed","5-speed","6-speed",
-                                                 "7-speed","8-speed","9-speed","10-speed","12-speed",
-                                                 "13-speed","15-speed","18-speed"])
+            return find_most_relevant_option(v, [
+                "2-speed","3-speed","4-speed","5-speed","6-speed",
+                "7-speed","8-speed","9-speed","10-speed","12-speed",
+                "13-speed","15-speed","18-speed"
+            ])
 
         if constraint == "OS - Transmission Type":
             return find_most_relevant_option(v, ["Automatic", "Manual"])
@@ -321,17 +316,13 @@ def make_extracted_info_compliant(extracted_info):
             key = v.upper()
             return mapping.get(key, find_most_relevant_option(v, list(mapping.values())))
 
-        if constraint == "OS - Number of Rear Axles":
-            return v  # will override later
-
         return v
 
     compliant = {}
     for field, constraint in field_constraints.items():
-        raw = extracted_info.get(field, "")
-        compliant[field] = convert_value(raw, constraint)
+        compliant[field] = convert_value(extracted_info.get(field, ""), constraint)
 
-    # Derive OS - Number of Rear Axles from OS - Axle Configuration if needed
+    # Derive rear axles
     cfg = compliant.get("OS - Axle Configuration", "")
     if cfg in ("4 x 2", "4 x 4"):
         compliant["OS - Number of Rear Axles"] = 1
@@ -342,7 +333,7 @@ def make_extracted_info_compliant(extracted_info):
     elif cfg == "10 x 4":
         compliant["OS - Number of Rear Axles"] = 4
 
-    # Ensure OS - Front Suspension Type = OS - Rear Suspension Type if one is blank
+    # Sync suspensions
     fst = compliant.get("OS - Front Suspension Type", "")
     rst = compliant.get("OS - Rear Suspension Type", "")
     if fst and not rst:
@@ -350,316 +341,278 @@ def make_extracted_info_compliant(extracted_info):
     if rst and not fst:
         compliant["OS - Front Suspension Type"] = rst
 
-    # Set Not Active = 1 if it was empty
+    # Default Not Active
     if compliant.get("Not Active", "") == "":
         compliant["Not Active"] = 1
 
-    # Unique id → always blank
+    # Clear unique id
     compliant["Unique id"] = ""
 
     return compliant
 
+# --------------------------------------------------
+# 5) Diagram info completion
 
-#
-# ── 5) Selenium driver setup (for pages behind JS / CAPTCHA)
-#
+def complete_diagram_info(diagram_info, compliant_info):
+    """
+    Given a partly‐filled diagram_info (with "Listing") and the compliant_info dict,
+    return a dict with all required "Fx" and "Rx" fields initialized.
+    """
+    config = compliant_info.get("OS - Axle Configuration", "")
+    fields = []
+    if config in ("4 x 2", "4 x 4"):
+        fields = ["F8","R1"]
+    elif config in ("6 x 2", "6 x 4", "6 x 6"):
+        fields = ["F8","R1","R2"]
+    elif config in ("8 x 2", "8 x 4", "8 x 6", "8 x 8"):
+        fields = ["F8","F7","R1","R2"]
+    elif config == "10 x 4":
+        fields = ["F8","F7","R1","R2","R3"]
+    elif config == "10 x 6":
+        fields = ["F8","F7","R1","R2","R3"]
+    elif config == "10 x 8":
+        fields = ["F8","F7","F6","R1","R2"]
+
+    out = {"Listing": diagram_info["Listing"]}
+    for f in fields:
+        out[f+" Dual Tires"]    = ""
+        out[f+" Lift Axle"]     = ""
+        out[f+" Power Axle"]    = ""
+        out[f+" Steer Axle"]    = ""
+        out[f+" Tire Size"]     = ""
+        out[f+" Wheel Material"]= ""
+
+    # Default R1
+    if "R1 Dual Tires" in out:
+        out["R1 Dual Tires"] = "yes"
+        out["R1 Lift Axle"]  = "no"
+        out["R1 Power Axle"] = "yes"
+        out["R1 Steer Axle"] = "no"
+
+    return out
+
+
+
+
+
+# --------------------------------------------------
+# Selenium driver setup
+# --------------------------------------------------
 def get_driver():
     opts = webdriver.ChromeOptions()
     opts.add_argument("--no-sandbox")
     opts.add_argument("--disable-dev-shm-usage")
     opts.add_argument("--disable-gpu")
     opts.add_argument("--window-size=1920,1080")
-
-    # Randomize UA slightly
-    uas = [
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/133.0.6943.54 Safari/537.36",
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/133.0.6943.54 Safari/537.36",
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0",
-    ]
-    opts.add_argument(f"user-agent={random.choice(uas)}")
-
-    # Automatically manage the ChromeDriver binary
     service = Service(ChromeDriverManager().install())
     driver = webdriver.Chrome(service=service, options=opts)
     driver.set_page_load_timeout(30)
     return driver
 
-
-#
-# ── 6) Write blocked URLs
-#
-def write_failed_url(url):
-    with open("failed.txt", "a") as f:
-        f.write(url + "\n")
-
-
-#
-# ── Revised get_vehicle_page_html (patch to replace old version) ──
-#
+# --------------------------------------------------
+# Get page text
+# --------------------------------------------------
 def get_vehicle_page_html(url):
-    """
-    Load `url` with Selenium, wait for <div id="template"> to appear, and return its text.
-    If blocked by CAPTCHA (“Pardon Our Interruption”), pause for manual solve.
-    """
-    driver = None
+    driver = get_driver()
     try:
-        driver = get_driver()
+        driver.get(url); time.sleep(5)
+        if "Pardon Our Interruption" in driver.page_source:
+            input("Solve CAPTCHA then Enter")
+        WebDriverWait(driver,20).until(EC.presence_of_element_located((By.ID,"template")))
+        soup=BeautifulSoup(driver.page_source,"html.parser")
+        div=soup.find("div",id="template")
+        return div.get_text(" ",strip=True) if div else ""
+    except Exception as e:
+        print("Page load error:", e)
+        return ""
+    finally:
+        driver.quit()
+
+# --------------------------------------------------
+# Collect detail URLs
+# --------------------------------------------------
+def get_target_listings(category_url):
+    base = "https://www.fydafreightliner.com"
+    urls=[]
+    driver=get_driver()
+    try:
+        driver.get(category_url); time.sleep(7)
+        while True:
+            driver.execute_script("window.scrollTo(0,document.body.scrollHeight);")
+            time.sleep(5)
+            WebDriverWait(driver,20).until(EC.presence_of_element_located((By.CSS_SELECTOR,"div.vehicle_row")))
+            rows = BeautifulSoup(driver.page_source,"html.parser").select("div.vehicle_row")
+            for r in rows:
+                a=r.find("a",href=True)
+                href=a["href"] if a else ""
+                if href.startswith("/"): href=base+href
+                urls.append(href)
+            try:
+                nxt=driver.find_element(By.ID,"next2")
+                if nxt.get_attribute("disabled"): break
+                nxt.click(); time.sleep(8)
+            except:
+                break
+        return urls
+    finally:
+        driver.quit()
+
+def get_listings():
+    return get_target_listings("https://www.fydafreightliner.com/commercial-trucks-vans-for-sale-ky-oh-pa--xNewInventory#page=xNewInventory&vc=sleeper")
+
+# --------------------------------------------------
+# Download & watermark images
+# --------------------------------------------------
+def download_images_from_fyda(url, dest):
+    driver = get_driver()
+    os.makedirs(dest, exist_ok=True)
+    urls = []
+
+    try:
+        # Load vehicle page
         driver.get(url)
         time.sleep(5)
 
-        # CAPTCHA check:
-        if "Pardon Our Interruption" in driver.page_source:
-            print("\nCAPTCHA detected at", url)
-            print("Please solve it in the browser window, then press Enter here…")
-            input()
-            time.sleep(5)
-            driver.refresh()
-            time.sleep(5)
-            if "Pardon Our Interruption" in driver.page_source:
-                print("Still blocked after CAPTCHA. Giving up on this URL.")
-                write_failed_url(url)
-                return ""
+        # Collect URLs from div.background-image
+        for div in driver.find_elements(By.CSS_SELECTOR, "div.background-image"):
+            s = div.get_attribute("style")
+            m = re.search(r'url\((.*?)\)', s)
+            if m:
+                urls.append(m.group(1).strip('"\''))
 
-        # Wait for the <div id="template"> to load
-        try:
-            WebDriverWait(driver, 20).until(
-                EC.presence_of_element_located((By.ID, "template"))
-            )
-        except TimeoutException:
-            print("`<div id='template'>` not found on", url)
-            return ""
+        # Collect image src values from gallery and general <img> tags
+        for img in driver.find_elements(By.CSS_SELECTOR, "div.galleryImages img") + driver.find_elements(By.TAG_NAME, "img"):
+            src = img.get_attribute("src")
+            if src and "inventory" in src:
+                urls.append(src)
 
-        # Now extract all visible text under <div id="template">
-        soup = BeautifulSoup(driver.page_source, "html.parser")
-        template_div = soup.find("div", id="template")
-        return template_div.get_text(separator=" ", strip=True) if template_div else ""
+        # Remove duplicates
+        urls = sorted(set(urls))
+        print(f"Found {len(urls)} images for {url}")
 
-    except Exception as e:
-        print("Error in get_vehicle_page_html:", e)
-        return ""
-    finally:
-        if driver:
-            driver.quit()
-
-
-#
-# ── 8) For each “category” URL (inventory index), collect all detail‐page URLs
-#
-def get_target_listings(category_url):
-    """
-    Load one “category” page (e.g. “day cab”, “sleeper”, etc.).  Collect all <div class="vehicle_row"> → <a href="…">
-    and paginate by clicking “next” (id="next2") until done.  Returns (list_of_detail_URLs, list_of_raw_texts).
-    We only need URLs for our pipeline; we drop the raw text here.
-    """
-    base = "https://www.fydafreightliner.com"
-    all_urls = []
-    all_texts = []
-    driver = None
-
-    try:
-        driver = get_driver()
-        driver.get(category_url)
-        time.sleep(7)
-
-        while True:
-            # Scroll down to load any lazy items
-            driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-            time.sleep(5)
-
-            WebDriverWait(driver, 20).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, "div[class*='vehicle_row']"))
-            )
-            soup = BeautifulSoup(driver.page_source, "html.parser")
-            rows = soup.find_all("div", class_=lambda c: c and "vehicle_row" in c)
-
-            for r in rows:
-                a = r.find("a", href=True)
-                text = r.get_text(separator=" ", strip=True)
-                if a:
-                    href = a["href"]
-                    if href.startswith("/"):
-                        href = base + href
-                    elif not href.startswith("http"):
-                        href = base + "/" + href
-                    all_urls.append(href)
-                    all_texts.append(text)
-                else:
-                    all_urls.append("")
-                    all_texts.append(text)
-
-            # Try clicking “Next” (id=next2)
+        # Download all found image URLs
+        paths = []
+        for i, u in enumerate(urls, 1):
+            ext = os.path.splitext(u.split("?", 1)[0])[1] or ".jpg"
+            fname = os.path.join(dest, f"fyda_{i}{ext}")
             try:
-                nxt = WebDriverWait(driver, 5).until(
-                    EC.presence_of_element_located((By.ID, "next2"))
-                )
-                if nxt.get_attribute("disabled"):
-                    break
-                nxt.click()
-                time.sleep(8)
-            except TimeoutException:
-                break
-            except Exception:
-                break
+                r = requests.get(u, timeout=10)
+                r.raise_for_status()
+                with open(fname, "wb") as f:
+                    f.write(r.content)
+                print(f"Downloaded {u} -> {fname}")
+                paths.append(fname)
+            except Exception as e:
+                print(f"Failed to download {u}: {e}")
 
-        return all_urls, all_texts
-    except WebDriverException as e:
-        print("WebDriver error:", e)
-        return [], []
+        return paths
+
     finally:
-        if driver:
-            driver.quit()
+        driver.quit()
 
 
-#
-# ── 9) Expose a flat “get_listings()” for pipeline/run_scraper.py
-#
-def get_listings():
-    """
-    Combine all category URLs into one flat list of detail‐page URLs.
-    """
-    category_urls = [
-        "https://www.fydafreightliner.com/--xallinventory?gad_source=1&gclid=…#page=xallinventory&vc=cab%20%26%20chassis",
-        "https://www.fydafreightliner.com/--xallinventory?…&vc=cab%20%26%20chassis%20trucks",
-        "https://www.fydafreightliner.com/--xallinventory?…&vc=conventional%20day%20cab%20trucks",
-        "https://www.fydafreightliner.com/--xallinventory?…&vc=conventional%20trucks%20w%2F%20sleeper",
-        "https://www.fydafreightliner.com/--xallinventory?…&vc=conventional%20trucks%20w%2Fo%20sleeper",
-        "https://www.fydafreightliner.com/--xallinventory?…&vc=conventional%20with%20sleeper",
-        "https://www.fydafreightliner.com/--xallinventory?…&vc=conventional%20without%20sleeper",
-        "https://www.fydafreightliner.com/--xallinventory?…&vc=day%20cab",
-        "https://www.fydafreightliner.com/--xallinventory?…&vc=day%20cab%20tractors",
-        "https://www.fydafreightliner.com/--xallinventory?…&vc=on%20highway",
-        "https://www.fydafreightliner.com/--xallinventory?…&vc=other",
-        "https://www.fydafreightliner.com/--xallinventory?…&vc=sleeper%20tractors",
-        "https://www.fydafreightliner.com/--xallinventory?…&vc=tractor",
-        "https://www.fydafreightliner.com/--xallinventory?…&vc=tri-drive",
-        "https://www.fydafreightliner.com/--xallinventory?…&vc=truck",
-    ]
+def watermark_images(files, outdir, wm):
+    os.makedirs(outdir, exist_ok=True)
 
-    all_details = []
-    for cu in category_urls:
-        urls, _ = get_target_listings(cu)
-        all_details.extend(urls)
+    for f in files:
+        if not os.path.exists(f):
+            print(f"Skipped missing file: {f}")
+            continue
 
-    # Remove duplicates while preserving order
-    seen = set()
-    final = []
-    for u in all_details:
-        if u and (u not in seen):
-            seen.add(u)
-            final.append(u)
-
-    return final
+        output_path = os.path.join(outdir, os.path.basename(f))
+        try:
+            add_watermark(f, wm, output_path)
+            print(f"Watermarked: {f} → {output_path}")
+        except Exception as e:
+            print(f"Watermark failed for {f}: {e}")
 
 
-#
-# ── 10) Diagram‐row defaults (same style as Jasper/Five_Star)
-#
-def complete_diagram_info(diagram_info, compliant_info):
-    """
-    Given a partly‐filled diagram_info (must have "Listing"), plus the compliant_info dict,
-    return a new dict with all "R1 Dual Tires", "R1 Lift Axle", etc. fields initialized.
-    """
-    config = compliant_info.get("OS - Axle Configuration", "")
-    fields = []
-    if config == "10 x 4":
-        fields = ["F8", "F7", "R1", "R2"]
-    elif config == "10 x 6":
-        fields = ["F8", "F7", "R1", "R2", "R3"]
-    elif config == "10 x 8":
-        fields = ["F8", "F7", "F6", "R1", "R2"]
-    elif config == "4 x 2":
-        fields = ["F8", "R1"]
-    elif config == "4 x 4":
-        fields = ["F8", "R1"]
-    elif config == "6 x 2":
-        fields = ["F8", "R1"]
-    elif config == "6 x 4":
-        fields = ["F8", "R1", "R2"]
-    elif config == "6 x 6":
-        fields = ["F8", "R1", "R2"]
-    elif config == "8 x 2":
-        fields = ["F8", "F7", "R1"]
-    elif config == "8 x 4":
-        fields = ["F8", "F7", "R1", "R2"]
-    elif config == "8 x 6":
-        fields = ["F8", "R1", "R2", "R3"]
-    elif config == "8 x 8":
-        fields = ["F8", "F7", "R1", "R2"]
-
-    out = {"Listing": diagram_info.get("Listing", "")}
-    for f in fields:
-        out[f + " Dual Tires"] = ""
-        out[f + " Lift Axle"] = ""
-        out[f + " Power Axle"] = ""
-        out[f + " Steer Axle"] = ""
-        out[f + " Tire Size"] = ""
-        out[f + " Wheel Material"] = ""
-
-    # Fill R1 defaults
-    if "R1 Dual Tires" in out:
-        out["R1 Dual Tires"] = "yes"
-    if "R1 Lift Axle" in out:
-        out["R1 Lift Axle"] = "no"
-    if "R1 Power Axle" in out:
-        out["R1 Power Axle"] = "yes"
-    if "R1 Steer Axle" in out:
-        out["R1 Steer Axle"] = "no"
-
-    return out
-
-
-#
-# ── 11) The “run” function for one detail‐page URL
-#
-def run(url, veh_info_csv, diagram_csv, image_folder):
-    """
-    1) Fetch text of detail page (via get_vehicle_page_html)
-    2) Extract fields with extract_vehicle_info → make_extracted_info_compliant
-    3) Write one row into veh_info_csv (plus "original_image_url"=url)
-    4) Build diagram row and write into diagram_csv
-    (No image-download for FYDA—just write CSVs.)
-    """
-    text = get_vehicle_page_html(url)
-    if not text:
-        print(f"[fyda] no text for {url}, skipping.")
-        return
-
-    extracted = extract_vehicle_info(text)
-    if not extracted:
-        print(f"[fyda] GPT extraction failed for {url}, skipping.")
-        return
-
-    extracted["Listing"] = url
-    extracted["Original info description"] = text
-
-    compliant = make_extracted_info_compliant(extracted)
-    compliant["original_image_url"] = url
-
-    # Write vehicle row
-    writeToCSV(compliant, None, veh_info_csv)
-
-    # Build & write diagram row
-    diag = {"Listing": url}
-    diag_filled = complete_diagram_info(diag, compliant)
-    writeToCSV(diag_filled, None, diagram_csv)
-
-    print(f"[fyda] Wrote data for {url}")
-
-
-#
-# If you ever want to run this module by itself for a quick smoke-test:
-#
-if __name__ == "__main__":
+# --------------------------------------------------
+# Run full scrape
+# --------------------------------------------------
+if __name__=="__main__":
+    RESULTS="results"
+    RAW=os.path.join(RESULTS,"images","fyda_raw")
+    WM=os.path.join(RESULTS,"images","fyda")
+    VEH=os.path.join(RESULTS,"vehicleinfo.csv")
+    DIA=os.path.join(RESULTS,"diagram.csv")
+    WATER="data/raw/group.png"
+    for d in [RAW,WM,RESULTS]: os.makedirs(d,exist_ok=True)
     listings = get_listings()
-    print(f"Found {len(listings)} FYDA detail URLs.")
-    # Just process the first one as a quick test:
-    if listings:
-        os.makedirs("results", exist_ok=True)
-        run(
-            listings[0],
-            "results/vehicleinfo.csv",
-            "results/diagram.csv",
-            "results/images"
-        )
+    print(f"Running full scrape for {len(listings)} listings...")
+    for url in listings:
+        print(f"Processing: {url}")
+        # extract + CSV
+        text = get_vehicle_page_html(url)
+        if not text: continue
+        data = extract_vehicle_info(text)
+        if not data: continue
+        data.update({"Listing":url, "Original info description":text})
+        comp = make_extracted_info_compliant(data)
+        comp["original_image_url"]=url
+        writeToCSV(comp, None, VEH)
+        writeToCSV( complete_diagram_info({"Listing":url}, comp), None, DIA)
+        # images
+        imgs = download_images_from_fyda(url, RAW)
+        if imgs:
+            watermark_images(imgs, WM, WATER)
+    print("Full scrape complete.")
+
+
+# At the very bottom of scrapers/fyda_freightliner.py
+
+
+def run(listing_url, veh_info_csv, diagram_csv, image_folder_root):
+    """
+    Orchestrates one FYDA listing:
+     1) Fetch & parse
+     2) Write CSV rows
+     3) Download, rename & watermark images
+    """
+    print(f"[fyda] Processing → {listing_url}")
+
+    # 1) Fetch page
+    text = get_vehicle_page_html(listing_url)
+    if not text:
+        print(f"[fyda] No text for {listing_url}; skipping.")
+        return
+
+    # 2) Extract data
+    data = extract_vehicle_info(text)
+    if not data:
+        print(f"[fyda] Extraction failed for {listing_url}; skipping.")
+        return
+
+    comp = make_extracted_info_compliant(data)
+    comp["Listing"] = listing_url
+
+    # 3) Write to CSVs
+    writeToCSV(comp, None, veh_info_csv)
+    writeToCSV(complete_diagram_info({"Listing": listing_url}, comp), None, diagram_csv)
+
+    # 4) Download images
+    raw_dir = os.path.join(image_folder_root, "fyda_raw")
+    paths = download_images_from_fyda(listing_url, raw_dir)
+    if paths:
+        stock_no = str(comp.get("Stock Number", "unknown"))
+        dest_dir = os.path.join(image_folder_root, stock_no)
+        os.makedirs(dest_dir, exist_ok=True)
+
+        for idx, src_path in enumerate(paths, start=1):
+            ext = os.path.splitext(src_path)[1]
+            dest_path = os.path.join(dest_dir, f"{idx}{ext}")
+            os.replace(src_path, dest_path)
+            print(f"Downloaded image {idx} → {dest_path}")
+        print(f"Downloaded {len(paths)} images to {dest_dir}")
+
+        # 5) Watermark
+        wm_dir = os.path.join(image_folder_root, f"{stock_no}-watermarked")
+        os.makedirs(wm_dir, exist_ok=True)
+        for img_file in sorted(os.listdir(dest_dir)):
+            src = os.path.join(dest_dir, img_file)
+            out = os.path.join(wm_dir, img_file)
+            add_watermark(src, "data/raw/group.png", out)
+            print(f"Processed watermark for: {img_file}")
+
+    # separator
+    print("-" * 60)
