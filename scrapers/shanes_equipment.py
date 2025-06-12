@@ -325,7 +325,7 @@ def make_extracted_info_compliant(extracted_info):
     if compliant.get("Not Active", "") == "":
         compliant["Not Active"] = 1
 
-    # Unique id → always blank
+    # Unique id -> always blank
     compliant["Unique id"] = ""
 
     return compliant
@@ -364,7 +364,7 @@ def write_failed_url(url):
 
 
 #
-# ── 7) Fetch a detail‐page’s text via Selenium → BeautifulSoup
+# ── 7) Fetch a detail‐page’s text via Selenium -> BeautifulSoup
 #
 def get_vehicle_page_html(url):
     """
@@ -419,7 +419,7 @@ def get_vehicle_page_html(url):
 
 
 #
-# ── 8) Crawl “inventory” listing pages → collect all detail‐URLs
+# ── 8) Crawl “inventory” listing pages -> collect all detail‐URLs
 #
 def get_target_listings():
     """
@@ -519,12 +519,12 @@ def get_listings():
 
 
 #
-# ── 10) Given one detail URL, fetch text → extract fields → write CSV rows
+# ── 10) Given one detail URL, fetch text -> extract fields -> write CSV rows
 #
 def run(url, veh_info_csv, diagram_csv, image_folder):
     """
     1) Fetch detail‐page text via get_vehicle_page_html()
-    2) Extract fields (extract_vehicle_info → make_extracted_info_compliant)
+    2) Extract fields (extract_vehicle_info -> make_extracted_info_compliant)
     3) Write one row into veh_info_csv; then build diagram row, write into diagram_csv.
     (No images are downloaded; image_folder is unused for Shane’s equipment.)
     """

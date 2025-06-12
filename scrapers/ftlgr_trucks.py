@@ -25,10 +25,10 @@ E. Cloud Browser/Proxy Service (e.g. ScraperAPI, ScrapingBee): Can work, but req
 
 Next Steps
 ----------
-→ **Best solution:** Integrate a residential or rotating proxy service in conjunction with Selenium, Playwright, or requests.
+-> **Best solution:** Integrate a residential or rotating proxy service in conjunction with Selenium, Playwright, or requests.
     - This is the only scalable approach for Cloudflare-protected automotive dealer sites.
     - Most production-grade automotive data vendors use this method.
-→ Until proxy integration is complete, test pipeline with manually pasted listing URLs if necessary.
+-> Until proxy integration is complete, test pipeline with manually pasted listing URLs if necessary.
 
 """
 
@@ -291,16 +291,16 @@ Rear Axle Ratio, Ref Number, Stock Number, Transmission Model, U.S. State,
 U.S. State (text), Vehicle model - new, Vehicle Price, Vehicle Year, VehicleVIN,
 Wheelbase.
 If a field is not found, leave it empty.
-By default, OS - Vehicle Condition = “Pre-Owned” unless Odometer Miles < 100 → “New.”
-If “Axle” label = “TANDEM” → OS - Axle Configuration = “6 x 4.”
-If “Axle” label = “SINGLE” → OS - Axle Configuration = “4 x 2.”
+By default, OS - Vehicle Condition = “Pre-Owned” unless Odometer Miles < 100 -> “New.”
+If “Axle” label = “TANDEM” -> OS - Axle Configuration = “6 x 4.”
+If “Axle” label = “SINGLE” -> OS - Axle Configuration = “4 x 2.”
 Assume “Diesel” for OS - Fuel Type.
 If Axle=“TANDEM,” OS - Number of Front Axles = 1 and OS - Number of Rear Axles = 2.
 If Axle=“SINGLE,” OS - Number of Front Axles = 1 and OS - Number of Rear Axles = 1.
 If Axle is empty, default OS - Axle Configuration = “6 x 4.” ECM Miles always blank.
 If Engine Model contains Engine Make, strip out the duplicate make. 
-Select the grey number followed by “Miles” → Odometer Miles.
-Select “Sleeper Cab” for OS - Sleeper or Day Cab unless paragraph under Stock # contains “Day” → “Day Cab.”
+Select the grey number followed by “Miles” -> Odometer Miles.
+Select “Sleeper Cab” for OS - Sleeper or Day Cab unless paragraph under Stock # contains “Day” -> “Day Cab.”
 Assume “Class 8” for OS - Vehicle Class and “Semi-tractor truck” for OS - Vehicle Type.
 Select “Vehicle model — new” based on the page title.
 Fields “Listing,” “Company Address,” and “Engine Displacement” always empty.
@@ -323,7 +323,7 @@ Just above the phone number is “City, ST.” Use the ST abbreviation to set bo
             max_tokens=1000
         )
         raw = resp.choices[0].message.content
-        print("[extract_vehicle_info] Raw GPT→JSON (first 200 chars):", raw[:200].replace("\n", " ") + " …")
+        print("[extract_vehicle_info] Raw GPT->JSON (first 200 chars):", raw[:200].replace("\n", " ") + " …")
         # Try parsing out the JSON object:
         cleaned = re.sub(r"^```json\s*|\s*```$", "", raw.strip())
         try:
@@ -539,7 +539,7 @@ def run(
 ) -> None:
     """
     1. Fetch raw text (get_vehicle_page_html)
-    2. extract with OpenAI → make_extracted_info_compliant
+    2. extract with OpenAI -> make_extracted_info_compliant
     3. Write both vehicle CSV row + diagram CSV row
     4. Download all images under image_folder_root/<Stock Number>/
     5. Watermark each image (group.png assumed at data/raw/group.png)
@@ -615,7 +615,7 @@ if __name__ == "__main__":
     listings = get_listings()
     print(f"[__main__] Will process {len(listings)} listings.")
     for idx, url in enumerate(listings, start=1):
-        print(f"[__main__] {idx}/{len(listings)} → {url}")
+        print(f"[__main__] {idx}/{len(listings)} -> {url}")
         os.makedirs("results", exist_ok=True)
         os.makedirs("results/images", exist_ok=True)
         run(url, "results/vehiculinfo.csv", "results/diagram.csv", "results/images")

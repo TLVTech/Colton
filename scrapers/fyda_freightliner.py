@@ -26,7 +26,7 @@ from core.output import write_to_csv
 try:
     from core.watermark import add_watermark
 except ImportError:
-    print("Warning: core.watermark not found → skipping watermarking.")
+    print("Warning: core.watermark not found -> skipping watermarking.")
     def add_watermark(input_path, watermark_path, output_path):
         print(f"Skipped watermark: {input_path}")
 
@@ -99,10 +99,10 @@ When Transmission Model is "DT12", "DT-12", or "DT 12", set OS - Transmission Sp
 The field OS - Transmission Type appears as "Transmission" in text; if it is "AMT", use "Automatic".
 The field "OS - Axle Configuration" appears as "Propulsion" in text.
 Always set OS - Number of Front Axles = 1.
-If OS - Axle Configuration is "4 x 2" or "4 x 4" → OS - Number of Rear Axles = 1;
-If "6 x 2" / "6 x 4" / "6 x 6" → OS - Number of Rear Axles = 2;
-If "8 x 4" / "8 x 6" → OS - Number of Rear Axles = 3;
-If "10 x 4" → OS - Number of Rear Axles = 4.
+If OS - Axle Configuration is "4 x 2" or "4 x 4" -> OS - Number of Rear Axles = 1;
+If "6 x 2" / "6 x 4" / "6 x 6" -> OS - Number of Rear Axles = 2;
+If "8 x 4" / "8 x 6" -> OS - Number of Rear Axles = 3;
+If "10 x 4" -> OS - Number of Rear Axles = 4.
 OS - Front Suspension Type and OS - Rear Suspension Type should match; if one is empty, copy the other.
 Set "Not Active" = 1.
 The field "Unique id" should always be "".
@@ -122,7 +122,7 @@ The field "Unique id" should always be "".
             max_tokens=1000
         )
         raw = resp.choices[0].message.content
-        print("RAW GPT→JSON (first 200 chars):", raw[:200].replace("\n", " "), "…")
+        print("RAW GPT->JSON (first 200 chars):", raw[:200].replace("\n", " "), "…")
         data = json.loads(raw)
         return data
     except Exception as e:
@@ -503,7 +503,7 @@ def watermark_images(files, outdir, wm):
         output_path = os.path.join(outdir, os.path.basename(f))
         try:
             add_watermark(f, wm, output_path)
-            print(f"Watermarked: {f} → {output_path}")
+            print(f"Watermarked: {f} -> {output_path}")
         except Exception as e:
             print(f"Watermark failed for {f}: {e}")
 
@@ -550,7 +550,7 @@ def run(listing_url, veh_info_csv, diagram_csv, image_folder_root):
      2) Write CSV rows
      3) Download, rename & watermark images
     """
-    print(f"[fyda] Processing → {listing_url}")
+    print(f"[fyda] Processing -> {listing_url}")
 
     # 1) Fetch page
     text = get_vehicle_page_html(listing_url)
@@ -583,7 +583,7 @@ def run(listing_url, veh_info_csv, diagram_csv, image_folder_root):
             ext = os.path.splitext(src_path)[1]
             dest_path = os.path.join(dest_dir, f"{idx}{ext}")
             os.replace(src_path, dest_path)
-            print(f"Downloaded image {idx} → {dest_path}")
+            print(f"Downloaded image {idx} -> {dest_path}")
         print(f"Downloaded {len(paths)} images to {dest_dir}")
 
         # 5) Watermark

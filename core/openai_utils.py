@@ -39,7 +39,7 @@ def extract_vehicle_info(
         raw = resp.choices[0].message.content
         if debug:
             snippet = raw[:200].replace("\n"," ") + " …"
-            print("RAW GPT→JSON (first 200 chars):", snippet)
+            print("RAW GPT->JSON (first 200 chars):", snippet)
         # strip ```json fences
         cleaned = re.sub(r'^```json\s*|\s*```$', '', raw.strip())
         return json.loads(cleaned)

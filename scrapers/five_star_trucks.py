@@ -367,7 +367,7 @@ def download_gallery_images(url: str, folder_name: str) -> None:
                 print(f"[download_gallery_images] Downloaded {file_path}")
             except Exception as e:
                 print(f"[download_gallery_images] Error downloading {img_url}: {e}")
-        print(f"[download_gallery_images] Done → {len(final_urls)} images")
+        print(f"[download_gallery_images] Done -> {len(final_urls)} images")
     except Exception as e:
         print(f"[download_gallery_images] Error accessing {url}: {e}")
 
@@ -383,9 +383,9 @@ def run(
 ) -> None:
     """
     1. get raw text
-    2. extract via OpenAI → compliant_info
+    2. extract via OpenAI -> compliant_info
     3. write vehicle CSV & diagram CSV
-    4. download images → watermarked folder
+    4. download images -> watermarked folder
     """
     # 1) fetch text
     vehicle_text = get_vehicle_page_html(listing_url)
@@ -393,7 +393,7 @@ def run(
         print(f"[run] Failed to fetch text for {listing_url}")
         return
 
-    # 2) extract → compliant
+    # 2) extract -> compliant
     extracted = extract_vehicle_info(vehicle_text)
     if not isinstance(extracted, dict):
         print(f"[run] Extraction failed for {listing_url}")

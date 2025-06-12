@@ -61,7 +61,7 @@ def download_images(image_urls: List[str], dest_folder: str, prefix: str = "") -
             with open(full_path, "wb") as f:
                 f.write(resp.content)
             saved_paths.append(full_path)
-            print(f"Downloaded image {idx} → {full_path}")
+            print(f"Downloaded image {idx} -> {full_path}")
         except Exception as e:
             print(f"Error downloading {url}: {e}")
 

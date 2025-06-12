@@ -22,10 +22,10 @@ def main():
               "run_all.py will still attempt to run, but 'scrapers' may fail.\n"
               "Either put a valid key into a '.env' file or export it in your shell before calling this script.\n")
     else:
-        print("→ OPENAI_API_KEY found.\n")
+        print("-> OPENAI_API_KEY found.\n")
 
     # 4) Run the scraper
-    print("→ Running scraper…")
+    print("-> Running scraper…")
     try:
         subprocess.run(
             [sys.executable, "pipeline/run_scraper.py"],
@@ -36,7 +36,7 @@ def main():
         sys.exit(1)
 
     # 5) Run the reconciliation
-    print("\n→ Running reconciliation…")
+    print("\n-> Running reconciliation…")
     try:
         subprocess.run(
             [sys.executable, "pipeline/run_reconciliation.py"],
@@ -49,7 +49,7 @@ def main():
     # 6) Zip up “results/” + “myresults/” into a single archive
     mydate = date.today().strftime("%Y-%m-%d")
     zip_name = f"results_Jasper_{mydate}_coltonmkt.zip"
-    print(f"\n→ Zipping up “results/” + “myresults/” → {zip_name}")
+    print(f"\n-> Zipping up “results/” + “myresults/” -> {zip_name}")
 
     directories_to_zip = ["results", "myresults"]
     with zipfile.ZipFile(zip_name, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
