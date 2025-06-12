@@ -26,7 +26,7 @@ def add_watermark(
         elif base_image.mode != 'RGBA':
             base_image = base_image.convert('RGBA')
 
-        # Load watermark (SVG→PNG if necessary)
+        # Load watermark (SVG->PNG if necessary)
         if watermark_path.lower().endswith('.svg'):
             svg_data = cairosvg.svg2png(url=watermark_path)
             watermark = Image.open(io.BytesIO(svg_data)).convert("RGBA")

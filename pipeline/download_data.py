@@ -4,7 +4,7 @@ import os
 import gdown
 
 def download_group_svg():
-    # Downloads the “group.svg → group.png” watermark
+    # Downloads the “group.svg -> group.png” watermark
     file_id = '1NYEOZf-BM2-S6CK0GbA1bIaUfIgiJhZ5'
     output_path = os.path.join('data', 'raw', 'group.png')
     os.makedirs(os.path.dirname(output_path), exist_ok=True)

@@ -287,7 +287,7 @@ Wheelbase. If a field is not found, leave it empty. Follow all special instructi
         extracted = resp.choices[0].message.content
 
         # Print the first 200 characters of GPT’s raw output for debugging
-        print("RAW GPT→JSON (first 200 chars):", extracted[:200].replace("\n", " ") + " …")
+        print("RAW GPT->JSON (first 200 chars):", extracted[:200].replace("\n", " ") + " …")
 
         # Clean the JSON string (remove any ``` fences, pretty-print, etc.)
         extracted_clean = clean_json_string(extracted)
@@ -564,7 +564,7 @@ def run(
 ) -> None:
     """
     1. Fetch raw text for `listing_url`
-    2. Extract JSON with OpenAI → compliant_info
+    2. Extract JSON with OpenAI -> compliant_info
     3. Write vehicle CSV row and diagram CSV row
     4. Download images under image_folder_root/<Stock Number>/
     5. Watermark those images

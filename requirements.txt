@@ -12,3 +12,4 @@ selenium
 webdriver-manager
 python-dotenv
 lxml
+undetected-chromedriver

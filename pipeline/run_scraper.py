@@ -1,4 +1,7 @@
 # pipeline/run_scraper.py
+import sys
+sys.stdout.reconfigure(encoding="utf-8")
+sys.stderr.reconfigure(encoding="utf-8")
 
 import os
 import argparse
@@ -80,7 +83,7 @@ if __name__ == "__main__":
     image_root   = os.path.join("results", "images")
 
     for idx, (source, url) in enumerate(urls, start=1):
-        print(f"[run_scraper] {idx}/{len(urls)} ({source}) → {url}")
+        print(f"[run_scraper] {idx}/{len(urls)} ({source}) => {url}")
         if source == "jasper":
             run_jasper(url, veh_info_csv, diagram_csv, image_root)
         elif source == "five_star":

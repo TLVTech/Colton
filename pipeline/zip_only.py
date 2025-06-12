@@ -45,14 +45,14 @@ def main():
         return
 
     # 4) Create the ZIP file in “w”rite mode
-    print(f"→ Creating ZIP file: {zip_filename}")
+    print(f"-> Creating ZIP file: {zip_filename}")
     with zipfile.ZipFile(zip_filename, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
         # 4a) zip up everything under results/
-        print("   → Adding 'results/' …")
+        print("   -> Adding 'results/' …")
         zip_folder(zf, "results", arc_root="results")
 
         # 4b) zip up everything under myresults/
-        print("   → Adding 'myresults/' …")
+        print("   -> Adding 'myresults/' …")
         zip_folder(zf, "myresults", arc_root="myresults")
 
     print(f"✔ Done. Created `{zip_filename}` in the project root.")
