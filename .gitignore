@@ -1,0 +1,27 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Virtual environment folder
+.venv/
+venv/
+
+# Results / output data (will be generated at runtime)
+results/
+myresults/
+
+# Temporary images
+temp_images/
+
+# Any zip packages
+*.zip
+
+# Environment file (API keys, secrets)
+.env
+
+# VS Code / JetBrains project files (optional)
+.vscode/
+.idea/
+clean-secret.json
+clean-secret.json
