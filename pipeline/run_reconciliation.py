@@ -191,7 +191,7 @@ def process_vehicle_data(vehicle_info_path, diagram_data_path, vehicle_info_org_
 
 if __name__ == "__main__":
     process_vehicle_data(
-        "results/vehiculinfo.csv",
+        "results/vehicleinfo.csv",
         "results/diagram.csv",
         "data/raw/vehicle_info_org.csv",
         []  # Or pass the listings list if you want to include URLs

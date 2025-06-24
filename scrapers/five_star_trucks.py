@@ -1501,7 +1501,7 @@ for listing in mylistings:
   print('I am processing ', listing)
   os.makedirs('results', exist_ok=True)
   imagefolder = 'results/images'
-  run(listing, 'results/vehiculinfo.csv', 'results/diagram.csv', imagefolder)
+  run(listing, 'results/vehicleinfo.csv', 'results/diagram.csv', imagefolder)
   print('*********************************************************************')
   print('*********************************************************************')
   print('*********************************************************************')

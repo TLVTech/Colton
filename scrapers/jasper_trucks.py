@@ -17,6 +17,11 @@ from urllib.parse import urljoin
 from core.output import write_to_csv
 from core.image_utils import extract_image_urls_from_page, download_images, watermark_images
 
+from PIL import Image, ImageDraw, ImageFont, ImageOps, ImageFilter, ImageEnhance
+from PIL.Image import Resampling
+import io
+import cairosvg
+
 
 # ── Load API key from environment ───────────────────────────────────────────────
 load_dotenv()
@@ -1196,7 +1201,7 @@ for listing in mylistings:
   print('I am processing ', listing)
   os.makedirs('results', exist_ok=True)
   imagefolder = 'results/images'
-  run(listing, 'results/vehiculeinfo.csv', 'results/diagram.csv', imagefolder)
+  run(listing, 'results/vehicleinfo.csv', 'results/diagram.csv', imagefolder)
   print('*********************************************************************')
   print('*********************************************************************')
   print('*********************************************************************')
@@ -1221,7 +1226,7 @@ def process_vehicle_data(vehicle_info_path, diagram_data_path, vehicle_info_org_
 
     # Define the output file paths
     output_paths = {
-        "vehicle": f"{output_dir}/vehicle_info.csv",
+        "vehicle": f"{output_dir}/vehicleinfo.csv",
         "diagram": f"{output_dir}/diagram_data.csv"
     }
 
@@ -1489,7 +1494,7 @@ def reorder_and_save_results(vehicle_data, diagram_data, out_vinf, out_ddata):
     print(f"Successfully wrote reordered data to {out_ddata}")
 
 process_vehicle_data(
-    "/content/results/vehiculeinfo.csv",
+    "/content/results/vehicleinfo.csv",
     "/content/results/diagram.csv",
     "/content/vehicle_info_org.csv",
     mylistings)
