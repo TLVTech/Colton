@@ -5,6 +5,7 @@ cairosvg
 gdown
 openai==0.28.1
 Pillow
+pillow-avif-plugin
 pandas
 requests
 urllib3
@@ -13,3 +14,4 @@ webdriver-manager
 python-dotenv
 lxml
 undetected-chromedriver
+pytest           # (optional, but highly recommended for testing)
