@@ -22,6 +22,8 @@ from PIL.Image import Resampling
 import io
 import cairosvg
 
+from core.output import write_to_csv
+
 
 # ── Load API key from environment ───────────────────────────────────────────────
 load_dotenv()
@@ -429,43 +431,8 @@ def get_target_listings():
 
     return final_listings
 
-#  original function
 # ── Step 2: Write generic CSV writer ──────────────────────────────────────────────
-def writeToCSV(data, attributes, filename):
-    # If data is a single dictionary, convert it to a list
-    if isinstance(data, dict):
-        data = [data]
-
-    # If attributes is not provided or is empty, use all keys from the data
-    if not attributes:
-        # Get all unique keys from all dictionaries in data
-        attributes = set()
-        for item in data:
-            attributes.update(item.keys())
-        attributes = sorted(list(attributes))  # Convert to sorted list for consistent order
-
-    # Check if file exists and is empty
-    file_exists = os.path.exists(filename)
-    file_empty = not file_exists or os.path.getsize(filename) == 0
-
-    # Open the file in append mode
-    with open(filename, mode='a', newline='') as file:
-        writer = csv.DictWriter(file, fieldnames=attributes)
-
-        # Write the header only if the file is new or empty
-        if file_empty:
-            writer.writeheader()
-
-        # Write each data item as a row
-        print('data')
-        print(data)
-        for item in data:
-            print('item ', item)
-            # Extract only the specified attributes
-            row = {attr: item.get(attr, "") for attr in attributes}  # Use empty string as default
-            print('row')
-            print(row)
-            writer.writerow(row)
+# write_to_csv(vehicle_data, attributes, "results/vehicleinfo.csv")
 
 #  original function
 # ── Step 3: Fetch and parse one vehicle page ───────────────────────────────────────
@@ -1039,7 +1006,7 @@ def download_images(url, folder_name):
 
 
 
-#   original function
+
 # ── Step 7: "run()" orchestrator ───────────────────────────────────────────────
 def run(url, filename, filename2, imagefolder):
     vehicle_text = get_vehicle_page_html(url)
@@ -1108,9 +1075,13 @@ def run(url, filename, filename2, imagefolder):
                       "Wheelbase",
                       "Original info description",
                       "original_image_url"]
+        
+
         compliant_info["original_image_url"] = url
-        writeToCSV(compliant_info, attributes, filename)
+        compliant_info["dealerName"] = "jasper"
+        write_to_csv([compliant_info], attributes, "results/vehicleinfo.csv")
         print('AAAAAAAAAaaaaaaa')
+
         diagram_info = {}
         diagram_info["original_image_url"] = url
         attributes2 = ["Listing",
@@ -1177,43 +1148,49 @@ def run(url, filename, filename2, imagefolder):
         print(diagram_info2)
         print("attribute2")
         print(attributes2)
-        writeToCSV(diagram_info2, attributes2, filename2)
-        path1 = imagefolder+'/'+compliant_info['Stock Number']
+        # No second write_to_csv call here!
+
+        path1 = imagefolder + '/' + compliant_info['Stock Number']
         os.makedirs(path1, exist_ok=True)
         download_images(url, path1)
-        process_folder_watermark(path1, path1+'-watermarked', WATERMARK_PATH, scale_factor=0.4, padding=60)
-
-
+        process_folder_watermark(path1, path1 + '-watermarked', WATERMARK_PATH, scale_factor=0.4, padding=60)
     else:
         print("No valid information extracted")
         print("Skipping CSV writing due to extraction failure")
 
 
+if __name__ == "__main__":
+    listings = get_target_listings()
+    print('I should be processing ', len(listings), ' listins')
+    mylistings = listings
+    n = 0
+
+    for listing in mylistings:
+        n += 1
+        print('I am processing ', listing)
+        os.makedirs('results', exist_ok=True)
+        imagefolder = 'results/images'
+        run(listing, 'results/vehicleinfo.csv', 'results/diagram.csv', imagefolder)
+        print('*********************************************************************')
+        print('*********************************************************************')
+        print('*********************************************************************')
+        print('*********************************************************************')
+        print('*********************************************************************')
+        print('listing ', n, ' over ', len(mylistings))
+        print('*********************************************************************')
+        print('*********************************************************************')
+        print('*********************************************************************')
+        print('*********************************************************************')
+        print('*********************************************************************')
 
 
+    process_vehicle_data(
+        "results/vehicleinfo.csv",
+        "results/diagram.csv",
+        "data/raw/vehicle_info_org.csv",
+        mylistings
+    )
 
-listings = get_target_listings()
-print('I should be processing ', len(listings), ' listins')
-mylistings = listings
-n = 0
-for listing in mylistings:
-  n += 1
-  print('I am processing ', listing)
-  os.makedirs('results', exist_ok=True)
-  imagefolder = 'results/images'
-  run(listing, 'results/vehicleinfo.csv', 'results/diagram.csv', imagefolder)
-  print('*********************************************************************')
-  print('*********************************************************************')
-  print('*********************************************************************')
-  print('*********************************************************************')
-  print('*********************************************************************')
-  print('listing ', n, ' over ', len(mylistings))
-
-  print('*********************************************************************')
-  print('*********************************************************************')
-  print('*********************************************************************')
-  print('*********************************************************************')
-  print('*********************************************************************')
 
 
 
@@ -1236,6 +1213,10 @@ def process_vehicle_data(vehicle_info_path, diagram_data_path, vehicle_info_org_
     # First pass: read files and determine categories
     vehicle_data = []
     diagram_data = []
+
+    # Add before the CSV write step:
+    for truck in vehicle_data:
+        truck['dealerName'] = 'jasper'
 
     # Read the original vehicle info into a dictionary
     with open(vehicle_info_org_path, "r", newline="") as org_file:
@@ -1492,10 +1473,4 @@ def reorder_and_save_results(vehicle_data, diagram_data, out_vinf, out_ddata):
 
     print(f"Successfully wrote reordered data to {out_vinf}")
     print(f"Successfully wrote reordered data to {out_ddata}")
-
-process_vehicle_data(
-    "/content/results/vehicleinfo.csv",
-    "/content/results/diagram.csv",
-    "/content/vehicle_info_org.csv",
-    mylistings)
 

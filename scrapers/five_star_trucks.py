@@ -1,6 +1,5 @@
 # Colton/scrapers/five_star_trucks.py
 
-
 import os
 import re
 import json
@@ -18,7 +17,8 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps, ImageFilter, ImageEnhance
 from PIL.Image import Resampling
 import io
 import cairosvg
-# 
+
+
 
 
 
@@ -1004,43 +1004,7 @@ def get_single_condition_listings(condition='used'):
     return list(all_listings)
 
 
-# original function
-# # ── (G) 7) Write data to CSV ────────────────────────────────────────────────────
-def writeToCSV(data, attributes, filename):
-    # If data is a single dictionary, convert it to a list
-    if isinstance(data, dict):
-        data = [data]
 
-    # If attributes is not provided or is empty, use all keys from the data
-    if not attributes:
-        # Get all unique keys from all dictionaries in data
-        attributes = set()
-        for item in data:
-            attributes.update(item.keys())
-        attributes = sorted(list(attributes))  # Convert to sorted list for consistent order
-
-    # Check if file exists and is empty
-    file_exists = os.path.exists(filename)
-    file_empty = not file_exists or os.path.getsize(filename) == 0
-
-    # Open the file in append mode
-    with open(filename, mode='a', newline='') as file:
-        writer = csv.DictWriter(file, fieldnames=attributes)
-
-        # Write the header only if the file is new or empty
-        if file_empty:
-            writer.writeheader()
-
-        # Write each data item as a row
-        print('data')
-        print(data)
-        for item in data:
-            print('item ', item)
-            # Extract only the specified attributes
-            row = {attr: item.get(attr, "") for attr in attributes}  # Use empty string as default
-            print('row')
-            print(row)
-            writer.writerow(row)
 
 # original function
 # ── (H) 8) run() orchestrator ───────────────────────────────────────────────────
@@ -1048,9 +1012,6 @@ def run(url, filename, filename2, imagefolder):
     vehicle_text = get_vehicle_page_html(url)
     print(vehicle_text)
     extracted_info = extract_vehicle_info(vehicle_text)
-
-    # Initialize compliant_info to None
-    compliant_info = None
 
     # Ensure extracted_info is a dictionary before assigning
     if isinstance(extracted_info, dict):
@@ -1114,9 +1075,14 @@ def run(url, filename, filename2, imagefolder):
                       "Wheelbase",
                       "Original info description",
                       "original_image_url"]
+        
+
+
         compliant_info["original_image_url"] = url
-        writeToCSV(compliant_info, attributes, filename)
+        compliant_info["dealerName"] = "five_star"
+        write_to_csv([compliant_info], attributes, "results/vehicleinfo.csv")
         print('AAAAAAAAAaaaaaaa')
+
         diagram_info = {}
         diagram_info["original_image_url"] = url
         attributes2 = ["Listing",
@@ -1178,37 +1144,24 @@ def run(url, filename, filename2, imagefolder):
                        "F8 Wheel Material",
                        "original_image_url"]
 
+
+
         diagram_info2 = complete_diagram_info(diagram_info, compliant_info)
         print('diagram_info before writing2')
         print(diagram_info2)
         print("attribute2")
         print(attributes2)
-        writeToCSV(diagram_info2, attributes2, filename2)
+        # No second write_to_csv call here!
+
+        path1 = imagefolder + '/' + compliant_info['Stock Number']
+        os.makedirs(path1, exist_ok=True)
+        download_gallery_images(url, path1)
+
+        process_folder_watermark(path1, path1 + '-watermarked', WATERMARK_PATH, scale_factor=0.4, padding=60)
     else:
         print("No valid information extracted")
         print("Skipping CSV writing due to extraction failure")
 
-    # Add error handling for the folder creation
-    try:
-        if compliant_info and 'Stock Number' in compliant_info:
-            path1 = imagefolder + '/' + compliant_info['Stock Number']
-            os.makedirs(path1, exist_ok=True)
-
-            # Check if downloadImages is defined and True
-            if 'downloadImages' in globals() and downloadImages:
-                download_gallery_images(url, path1)
-                if 'process_folder_watermark' in globals():
-                    process_folder_watermark(
-    path1,
-    path1 + '-watermarked',
-    WATERMARK_PATH,
-    scale_factor=0.4,
-    padding=60
-)
-        else:
-            print("Skipping image download due to missing stock number or invalid data")
-    except Exception as e:
-        print(f"Error during image processing: {str(e)}")
 
 # original function
 # # ── (I) 9) Process vehicle data ─────────────────────────────────────────────────
@@ -1229,6 +1182,10 @@ def process_vehicle_data(vehicle_info_path, diagram_data_path, vehicle_info_org_
     # First pass: read files and determine categories
     vehicle_data = []
     diagram_data = []
+
+    # Add before the CSV write step:
+    for truck in vehicle_data:
+        truck['dealerName'] = 'five_star'
 
     # Read the original vehicle info into a dictionary
     with open(vehicle_info_org_path, "r", newline="") as org_file:
@@ -1484,36 +1441,29 @@ def reorder_and_save_results(vehicle_data, diagram_data, out_vinf, out_ddata):
     print(f"Successfully wrote reordered data to {out_vinf}")
     print(f"Successfully wrote reordered data to {out_ddata}")
 
-# original function
-#def main():
-listings = get_listings()
-print('I should be processing ', len(listings), ' listins')
-mylistings = listings
-
-#mylistings = []
-#mylistings.append(listings[0])
-#mylistings.append(listings[1])
-#mylistings.append(listings[2])
-#print('i am reducing this to 1 listing')
-n = 0
-for listing in mylistings:
-  n += 1
-  print('I am processing ', listing)
-  os.makedirs('results', exist_ok=True)
-  imagefolder = 'results/images'
-  run(listing, 'results/vehicleinfo.csv', 'results/diagram.csv', imagefolder)
-  print('*********************************************************************')
-  print('*********************************************************************')
-  print('*********************************************************************')
-  print('*********************************************************************')
-  print('*********************************************************************')
-  print('listing ', n, ' over ', len(mylistings))
-  print('*********************************************************************')
-  print('*********************************************************************')
-  print('*********************************************************************')
-  print('*********************************************************************')
-  print('*********************************************************************')
 
 
-#if __name__ == "__main__":
-#    main()
+if __name__ == "__main__":
+    listings = get_listings()
+    print('I should be processing ', len(listings), ' listins')
+    mylistings = listings
+    n = 0
+    for listing in mylistings:
+        n += 1
+        print('I am processing ', listing)
+        os.makedirs('results', exist_ok=True)
+        imagefolder = 'results/images'
+        run(listing, 'results/vehicleinfo.csv', 'results/diagram.csv', imagefolder)
+        print('*********************************************************************')
+        print('*********************************************************************')
+        print('*********************************************************************')
+        print('*********************************************************************')
+        print('*********************************************************************')
+        print('listing ', n, ' over ', len(mylistings))
+        print('*********************************************************************')
+        print('*********************************************************************')
+        print('*********************************************************************')
+        print('*********************************************************************')
+        print('*********************************************************************')
+
+

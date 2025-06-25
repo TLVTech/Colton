@@ -1,70 +1,42 @@
-#!/usr/bin/env python3
-import os
 import sys
 import subprocess
-import zipfile
-from datetime import date
+import os
+
+# Always ensure working directory is project root (one level up from 'pipeline')
+os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# You can enable/disable any scraper here
+SCRAPERS = [
+    {"name": "five_star", "check": True},
+    {"name": "jasper",    "check": True},
+    {"name": "fyda",      "check": True},
+    {"name": "ftlgr",     "check": False},
+    {"name": "shanes",    "check": False},
+]
+
+def run_scraper(scraper_name):
+    try:
+        print(f"\n=== RUNNING SCRAPER: {scraper_name} ===")
+        subprocess.run([sys.executable, "-m", "pipeline.run_scraper", "--source", scraper_name], check=True)
+    except subprocess.CalledProcessError as e:
+        print(f"!! Error running scraper {scraper_name}: {e}")
 
 def main():
-    # 1) Make sure we're running from the project root (where run_all.py lives)
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    os.chdir(script_dir)
+    for scraper in SCRAPERS:
+        if scraper["check"]:
+            run_scraper(scraper["name"])
 
-    # 2) (Optional) Ensure PYTHONPATH points to “.” so that `scrapers/` etc. are importable.
-    #    In almost all cases, simply running "python run_all.py" from the repo root
-    #    is enough (Python will see '' in sys.path). If you have trouble, uncomment below:
-    #
-    # os.environ["PYTHONPATH"] = script_dir
-
-    # 3) Check for OPENAI_API_KEY (the scraper code calls load_dotenv() at runtime).
-    if not os.getenv("OPENAI_API_KEY"):
-        print("Warning: OPENAI_API_KEY is not set in the environment. "
-              "run_all.py will still attempt to run, but 'scrapers' may fail.\n"
-              "Either put a valid key into a '.env' file or export it in your shell before calling this script.\n")
-    else:
-        print("-> OPENAI_API_KEY found.\n")
-
-    # 4) Run the scraper
-    print("-> Running scraper…")
+    print("\n=== RUNNING RECONCILIATION ===")
     try:
-        subprocess.run(
-            [sys.executable, "pipeline/run_scraper.py"],
-            check=True
-        )
+        subprocess.run([sys.executable, "-m", "pipeline.run_reconciliation"], check=True)
     except subprocess.CalledProcessError as e:
-        print(f"Error: 'run_scraper.py' failed with exit code {e.returncode}")
-        sys.exit(1)
+        print(f"!! Error in reconciliation: {e}")
 
-    # 5) Run the reconciliation
-    print("\n-> Running reconciliation…")
+    print("\n=== CREATING ZIP ARCHIVE ===")
     try:
-        subprocess.run(
-            [sys.executable, "pipeline/run_reconciliation.py"],
-            check=True
-        )
+        subprocess.run([sys.executable, "-m", "pipeline.zip_only"], check=True)
     except subprocess.CalledProcessError as e:
-        print(f"Error: 'run_reconciliation.py' failed with exit code {e.returncode}")
-        sys.exit(1)
-
-    # 6) Zip up “results/” + “myresults/” into a single archive
-    mydate = date.today().strftime("%Y-%m-%d")
-    zip_name = f"results_Jasper_{mydate}_coltonmkt.zip"
-    print(f"\n-> Zipping up “results/” + “myresults/” -> {zip_name}")
-
-    directories_to_zip = ["results", "myresults"]
-    with zipfile.ZipFile(zip_name, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
-        for folder in directories_to_zip:
-            if not os.path.isdir(folder):
-                print(f"Warning: directory '{folder}/' not found; skipping it.")
-                continue
-
-            for root, dirs, files in os.walk(folder):
-                for filename in files:
-                    filepath = os.path.join(root, filename)
-                    # arcname should be relative, so that zip root contains "results/..." and "myresults/..."
-                    arcname = os.path.relpath(filepath, start=script_dir)
-                    zf.write(filepath, arcname)
-    print(f"\nDone. Created: {zip_name}\n")
+        print(f"!! Error in zipping: {e}")
 
 if __name__ == "__main__":
     main()

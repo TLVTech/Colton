@@ -1,10 +1,11 @@
 # pipeline/run_scraper.py
 import sys
-sys.stdout.reconfigure(encoding="utf-8")
-sys.stderr.reconfigure(encoding="utf-8")
-
 import os
 import argparse
+
+# Ensure output can handle Unicode (especially for Windows)
+sys.stdout.reconfigure(encoding="utf-8")
+sys.stderr.reconfigure(encoding="utf-8")
 
 from scrapers.jasper_trucks import get_target_listings as get_jasper_listings, run as run_jasper
 from scrapers.five_star_trucks import get_listings as get_five_star_listings, run as run_five_star
@@ -28,7 +29,6 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    # Build a combined list of (source_name, url) tuples
     urls = []
 
     # ── Jasper
@@ -47,7 +47,7 @@ if __name__ == "__main__":
         print(f"[run_scraper] Adding {len(five_star)} 5 Star URLs.")
         urls.extend([("five_star", u) for u in five_star])
 
-    # ── FTGLR
+    # ── FTLGR
     if args.source in ("ftlgr", "all"):
         ftlgr = get_ftlgr_listings()
         if args.limit is not None:
@@ -55,14 +55,13 @@ if __name__ == "__main__":
         print(f"[run_scraper] Adding {len(ftlgr)} FTLGR URLs.")
         urls.extend([("ftlgr", u) for u in ftlgr])
 
-# ── FYDA Freightliner
+    # ── FYDA Freightliner
     if args.source in ("fyda", "all"):
-        fyda_urls = get_fyda_listings()                     # no 'limit' argument
+        fyda_urls = get_fyda_listings()
         if args.limit is not None:
             fyda_urls = fyda_urls[: args.limit]
         print(f"[run_scraper] Adding {len(fyda_urls)} FYDA URLs.")
         urls.extend([("fyda", u) for u in fyda_urls])
-
 
     # ── Shanes Equipment
     if args.source in ("shanes_equipment", "all"):
@@ -78,7 +77,7 @@ if __name__ == "__main__":
     os.makedirs("results", exist_ok=True)
     os.makedirs("results/images", exist_ok=True)
 
-    veh_info_csv = os.path.join("results", "vehiculinfo.csv")
+    veh_info_csv = os.path.join("results", "vehicleinfo.csv")
     diagram_csv  = os.path.join("results", "diagram.csv")
     image_root   = os.path.join("results", "images")
 
