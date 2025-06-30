@@ -13,5 +13,7 @@ selenium
 webdriver-manager
 python-dotenv
 lxml
-undetected-chromedriver
 pytest           # (optional, but highly recommended for testing)
+boto3
+chromedriver-autoinstaller
+undetected-chromedriver

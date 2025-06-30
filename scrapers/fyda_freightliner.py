@@ -14,13 +14,18 @@ from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 import openai
 
+import chromedriver_autoinstaller
+chromedriver_autoinstaller.install()
+
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, WebDriverException
-from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
+# from selenium.webdriver.chrome.service import Service
+# from webdriver_manager.chrome import ChromeDriverManager
+# driver = webdriver.Chrome(options=opts)
+
 
 # CSV reconciliation (for output and reordering)
 from core.output import write_to_csv  # (If you use the utility version for writing rows)
@@ -55,12 +60,20 @@ if not openai.api_key:
 # --------------------------------------------------
 def get_driver():
     opts = webdriver.ChromeOptions()
+    opts.add_argument("--headless=new")  # For Chrome 109+, or just "--headless" for older
     opts.add_argument("--no-sandbox")
     opts.add_argument("--disable-dev-shm-usage")
     opts.add_argument("--disable-gpu")
+    opts.add_argument("--disable-software-rasterizer")
     opts.add_argument("--window-size=1920,1080")
-    service = Service(ChromeDriverManager().install())
-    driver = webdriver.Chrome(service=service, options=opts)
+    opts.add_argument("--disable-extensions")
+    opts.add_argument("--disable-infobars")
+    opts.add_argument("--disable-blink-features=AutomationControlled")
+    opts.add_experimental_option("excludeSwitches", ["enable-automation"])
+    opts.add_experimental_option("useAutomationExtension", False)
+
+    # chromedriver_autoinstaller has already run at the top of your file!
+    driver = webdriver.Chrome(options=opts)
     driver.set_page_load_timeout(30)
     return driver
 
@@ -130,7 +143,9 @@ def download_fyda_images(url, dest, stock_number, watermark_func=None):
         return paths
 
     finally:
-        driver.quit()# original code 
+        driver.quit()
+        
+        # original code 
 # --------------------------------------------------
 # 1) Extract JSON from text
 def extract_json(text):
@@ -682,7 +697,6 @@ def complete_diagram_info(diagram_info, compliant_info):
 
 
     return ''
-
 
 # --------------------------------------------------
 # Get page text

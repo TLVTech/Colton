@@ -1006,7 +1006,7 @@ def get_single_condition_listings(condition='used'):
 
 
 
-# original function
+
 # ── (H) 8) run() orchestrator ───────────────────────────────────────────────────
 def run(url, filename, filename2, imagefolder):
     vehicle_text = get_vehicle_page_html(url)
@@ -1020,140 +1020,59 @@ def run(url, filename, filename2, imagefolder):
         print("-----------------------------")
         print(json.dumps(extracted_info, indent=2))
 
-        # Only proceed with compliance check and CSV writing if we have valid data
         compliant_info = make_extracted_info_compliant(extracted_info)
         print("\nCompliant Vehicle Information:")
         print("-----------------------------")
         print(json.dumps(compliant_info, indent=2))
 
-        attributes = ["Company Address",
-                      "ECM Miles",
-                      "Engine Displacement",
-                      "Engine Horsepower",
-                      "Engine Hours",
-                      "Engine Model",
-                      "Engine Serial Number",
-                      "Engine Torque",
-                      "Front Axle Capacity",
-                      "Fuel Capacity",
-                      "glider",
-                      "Listing",
-                      "Location",
-                      "Not Active",
-                      "Odometer Miles",
-                      "OS - Axle Configuration",
-                      "OS - Brake System Type",
-                      "OS - Engine Make",
-                      "OS - Fifth Wheel Type",
-                      "OS - Front Suspension Type",
-                      "OS - Fuel Type",
-                      "OS - Number of Front Axles",
-                      "OS - Number of Fuel Tanks",
-                      "OS - Number of Rear Axles",
-                      "OS - Rear Suspension Type",
-                      "OS - Sleeper or Day Cab",
-                      "OS - Transmission Make",
-                      "OS - Transmission Speeds",
-                      "OS - Transmission Type",
-                      "OS - Vehicle Class",
-                      "OS - Vehicle Condition",
-                      "OS - Vehicle Make",
-                      "OS - Vehicle Make Logo",
-                      "OS - Vehicle Type",
-                      "OS - Vehicle Year",
-                      "Rear Axle Capacity",
-                      "Rear Axle Ratio",
-                      "Ref Number",
-                      "Stock Number",
-                      "Transmission Model",
-                      "U.S. State",
-                      "U.S. State (text)",
-                      "Vehicle model - new",
-                      "Vehicle Price",
-                      "Vehicle Year",
-                      "VehicleVIN",
-                      "Wheelbase",
-                      "Original info description",
-                      "original_image_url"]
-        
-
+        attributes = [
+            "Company Address", "ECM Miles", "Engine Displacement", "Engine Horsepower", "Engine Hours",
+            "Engine Model", "Engine Serial Number", "Engine Torque", "Front Axle Capacity", "Fuel Capacity",
+            "glider", "Listing", "Location", "Not Active", "Odometer Miles", "OS - Axle Configuration",
+            "OS - Brake System Type", "OS - Engine Make", "OS - Fifth Wheel Type", "OS - Front Suspension Type",
+            "OS - Fuel Type", "OS - Number of Front Axles", "OS - Number of Fuel Tanks", "OS - Number of Rear Axles",
+            "OS - Rear Suspension Type", "OS - Sleeper or Day Cab", "OS - Transmission Make", "OS - Transmission Speeds",
+            "OS - Transmission Type", "OS - Vehicle Class", "OS - Vehicle Condition", "OS - Vehicle Make",
+            "OS - Vehicle Make Logo", "OS - Vehicle Type", "OS - Vehicle Year", "Rear Axle Capacity", "Rear Axle Ratio",
+            "Ref Number", "Stock Number", "Transmission Model", "U.S. State", "U.S. State (text)", "Vehicle model - new",
+            "Vehicle Price", "Vehicle Year", "VehicleVIN", "Wheelbase", "Original info description", "original_image_url"
+        ]
 
         compliant_info["original_image_url"] = url
         compliant_info["dealerName"] = "five_star"
-        write_to_csv([compliant_info], attributes, "results/vehicleinfo.csv")
+        write_to_csv([compliant_info], attributes, filename)
+
         print('AAAAAAAAAaaaaaaa')
 
+        # --- Diagram Info Section ---
         diagram_info = {}
+        diagram_info["Listing"] = url   # Required primary key/URL for diagram row
         diagram_info["original_image_url"] = url
-        attributes2 = ["Listing",
-                       "R1 Brake Type",
-                       "R1 Dual Tires",
-                       "R1 Lift Axle",
-                       "R1 Power Axle",
-                       "R1 Steer Axle",
-                       "R1 Tire Size",
-                       "R1 Wheel Material",
-                       "R2 Brake Type",
-                       "R2 Dual Tires",
-                       "R2 Lift Axle",
-                       "R2 Power Axle",
-                       "R2 Steer Axle",
-                       "R2 Tire Size",
-                       "R2 Wheel Material",
-                       "R3 Brake Type",
-                       "R3 Dual Tires",
-                       "R3 Lift Axle",
-                       "R3 Power Axle",
-                       "R3 Steer Axle",
-                       "R3 Tire Size",
-                       "R3 Wheel Material",
-                       "R4 Brake Type",
-                       "R4 Dual Tires",
-                       "R4 Lift Axle",
-                       "R4 Power Axle",
-                       "R4 Steer Axle",
-                       "R4 Tire Size",
-                       "R4 Wheel Material",
-                       "F5 Brake Type",
-                       "F5 Dual Tires",
-                       "F5 Lift Axle",
-                       "F5 Power Axle",
-                       "F5 Steer Axle",
-                       "F5 Tire Size",
-                       "F5 Wheel Material",
-                       "F6 Brake Type",
-                       "F6 Dual Tires",
-                       "F6 Lift Axle",
-                       "F6 Power Axle",
-                       "F6 Steer Axle",
-                       "F6 Tire Size",
-                       "F6 Wheel Material",
-                       "F7 Brake Type",
-                       "F7 Dual Tires",
-                       "F7 Lift Axle",
-                       "F7 Power Axle",
-                       "F7 Steer Axle",
-                       "F7 Tire Size",
-                       "F7 Wheel Material",
-                       "F8 Brake Type",
-                       "F8 Dual Tires",
-                       "F8 Lift Axle",
-                       "F8 Power Axle",
-                       "F8 Steer Axle",
-                       "F8 Tire Size",
-                       "F8 Wheel Material",
-                       "original_image_url"]
 
-
+        attributes2 = [
+            "Listing", "R1 Brake Type", "R1 Dual Tires", "R1 Lift Axle", "R1 Power Axle", "R1 Steer Axle", "R1 Tire Size",
+            "R1 Wheel Material", "R2 Brake Type", "R2 Dual Tires", "R2 Lift Axle", "R2 Power Axle", "R2 Steer Axle",
+            "R2 Tire Size", "R2 Wheel Material", "R3 Brake Type", "R3 Dual Tires", "R3 Lift Axle", "R3 Power Axle",
+            "R3 Steer Axle", "R3 Tire Size", "R3 Wheel Material", "R4 Brake Type", "R4 Dual Tires", "R4 Lift Axle",
+            "R4 Power Axle", "R4 Steer Axle", "R4 Tire Size", "R4 Wheel Material", "F5 Brake Type", "F5 Dual Tires",
+            "F5 Lift Axle", "F5 Power Axle", "F5 Steer Axle", "F5 Tire Size", "F5 Wheel Material", "F6 Brake Type",
+            "F6 Dual Tires", "F6 Lift Axle", "F6 Power Axle", "F6 Steer Axle", "F6 Tire Size", "F6 Wheel Material",
+            "F7 Brake Type", "F7 Dual Tires", "F7 Lift Axle", "F7 Power Axle", "F7 Steer Axle", "F7 Tire Size",
+            "F7 Wheel Material", "F8 Brake Type", "F8 Dual Tires", "F8 Lift Axle", "F8 Power Axle", "F8 Steer Axle",
+            "F8 Tire Size", "F8 Wheel Material", "original_image_url"
+        ]
 
         diagram_info2 = complete_diagram_info(diagram_info, compliant_info)
         print('diagram_info before writing2')
         print(diagram_info2)
         print("attribute2")
         print(attributes2)
-        # No second write_to_csv call here!
 
-        path1 = imagefolder + '/' + compliant_info['Stock Number']
+        # --- Always Write Diagram CSV! ---
+        write_to_csv([diagram_info2], attributes2, filename2)
+
+        # --- Image Processing ---
+        path1 = os.path.join(imagefolder, compliant_info['Stock Number'])
         os.makedirs(path1, exist_ok=True)
         download_gallery_images(url, path1)
 
@@ -1161,7 +1080,6 @@ def run(url, filename, filename2, imagefolder):
     else:
         print("No valid information extracted")
         print("Skipping CSV writing due to extraction failure")
-
 
 # original function
 # # ── (I) 9) Process vehicle data ─────────────────────────────────────────────────

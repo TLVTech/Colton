@@ -1,0 +1,18 @@
+[
+  {
+    "Id": "1",
+    "Arn": "arn:aws:ecs:us-east-1:011528292014:cluster/colton-ingestion-cluster",
+    "RoleArn": "arn:aws:iam::011528292014:role/ecsTaskExecutionRole",
+    "EcsParameters": {
+      "TaskDefinitionArn": "arn:aws:ecs:us-east-1:011528292014:task-definition/colton-ingestion-task:32",
+      "LaunchType": "FARGATE",
+      "NetworkConfiguration": {
+        "awsvpcConfiguration": {
+          "Subnets": ["subnet-0519c0c420a8b092d"],
+          "SecurityGroups": ["sg-014f65acd7949ae7b"],
+          "AssignPublicIp": "ENABLED"
+        }
+      }
+    }
+  }
+]

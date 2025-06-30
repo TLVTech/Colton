@@ -49,6 +49,21 @@ docker tag "${ECR_REPO}:${IMAGE_TAG}" "${ECR_URI}"
 echo "🚀 Pushing image to ECR"
 docker push "${ECR_URI}"
 
+echo "📝 Registering new ECS task definition..."
+aws ecs register-task-definition \
+  --cli-input-json file://taskdef.json \
+  --region "${AWS_REGION}"
+
+NEW_REV=$(aws ecs list-task-definitions --family-prefix colton-ingestion-task --sort DESC --region "${AWS_REGION}" | grep colton-ingestion-task | head -1 | grep -o '[0-9]\+$')
+
+echo "🔄 Updating ECS service to new revision $NEW_REV..."
+aws ecs update-service \
+  --cluster "${CLUSTER_NAME}" \
+  --service "${SERVICE_NAME}" \
+  --task-definition "colton-ingestion-task:${NEW_REV}" \
+  --force-new-deployment \
+  --region "${AWS_REGION}"
+
 # ─── Trigger a new ECS deployment ─────────────────────────────────────────────
 
 echo "🔄 Updating ECS service to force new deployment"

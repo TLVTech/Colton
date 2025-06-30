@@ -1083,7 +1083,7 @@ def run(url, filename, filename2, imagefolder):
         print('AAAAAAAAAaaaaaaa')
 
         diagram_info = {}
-        diagram_info["original_image_url"] = url
+        diagram_info["Listing"] = url
         attributes2 = ["Listing",
                        "R1 Brake Type",
                        "R1 Dual Tires",
@@ -1148,7 +1148,7 @@ def run(url, filename, filename2, imagefolder):
         print(diagram_info2)
         print("attribute2")
         print(attributes2)
-        # No second write_to_csv call here!
+        write_to_csv([diagram_info2], attributes2, filename2)
 
         path1 = imagefolder + '/' + compliant_info['Stock Number']
         os.makedirs(path1, exist_ok=True)

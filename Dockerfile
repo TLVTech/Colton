@@ -1,43 +1,21 @@
-# ─────────────────────────────
-# 🐳 Base Python image
-# ─────────────────────────────
+# ---- BASE PYTHON IMAGE ----
 FROM python:3.10-slim-bullseye
 
-# ─────────────────────────────
-# 🌐 Install & generate a UTF-8 locale
-# ─────────────────────────────
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends locales --fix-missing \
-    && sed -i 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen \
-    && locale-gen en_US.UTF-8 \
-    && update-locale LANG=en_US.UTF-8 \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
-# ─────────────────────────────
-# 🌐 Force UTF-8 for Python I/O
-# ─────────────────────────────
-ENV LANG=en_US.UTF-8 \
-    LC_ALL=en_US.UTF-8 \
-    PYTHONUTF8=1 \
-    PYTHONIOENCODING=utf-8
-
-# ─────────────────────────────
-# 🧰 Install OS dependencies
-# ─────────────────────────────
-RUN apt-get update && apt-get install -y \
+# ---- SYSTEM DEPENDENCIES ----
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
     build-essential \
+    wget \
+    curl \
+    unzip \
+    gnupg \
+    fonts-liberation \
     libglib2.0-0 \
     libsm6 \
     libxext6 \
     libxrender-dev \
     libpoppler-cpp-dev \
     libjpeg-dev \
-    curl \
-    unzip \
-    gnupg \
-    chromium \
-    chromium-driver \
-    fonts-liberation \
     libappindicator3-1 \
     libasound2 \
     libatk1.0-0 \
@@ -53,33 +31,30 @@ RUN apt-get update && apt-get install -y \
     libxrandr2 \
     libxss1 \
     xdg-utils \
+    awscli \
+    chromium \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# ─────────────────────────────
-# 🏗 Set working directory
-# ─────────────────────────────
+# ---- ENVIRONMENT ----
+ENV LANG=en_US.UTF-8 \
+    LC_ALL=en_US.UTF-8 \
+    PYTHONUTF8=1 \
+    PYTHONIOENCODING=utf-8 \
+    CHROME_BIN=/usr/bin/chromium
+
+# ---- WORKDIR ----
 WORKDIR /app
 
-# ─────────────────────────────
-# 📁 Copy source code
-# ─────────────────────────────
+# ---- COPY SOURCE ----
 COPY . /app
 
-# ─────────────────────────────
-# 📦 Install Python dependencies
-# ─────────────────────────────
-RUN pip install --upgrade pip \
-    && pip install -r requirements.txt
+# ---- INSTALL PYTHON DEPENDENCIES ----
+RUN pip install --upgrade pip && \
+    pip install -r requirements.txt
 
-# ─────────────────────────────
-# 🧭 Add /app to Python path
-# ─────────────────────────────
+# ---- PYTHONPATH ----
 ENV PYTHONPATH="/app"
 
-# ─────────────────────────────
-# 🏃 Default run command (can be overridden)
-# ─────────────────────────────
-#   -X utf8    -> force Python’s UTF-8 mode
-#   -u         -> unbuffered stdout/stderr (helps logs appear in real time)
-CMD ["python", "-X", "utf8", "-u", "pipeline/run_scraper.py", "--source", "jasper", "--limit", "1"]
+# ---- ENTRYPOINT ----
+CMD ["python", "-X", "utf8", "-u", "pipeline/run_all.py"]

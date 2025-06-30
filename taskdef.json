@@ -1,0 +1,38 @@
+{
+  "family": "colton-ingestion-task",
+  "executionRoleArn": "arn:aws:iam::011528292014:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::011528292014:role/ecsTaskExecutionRole",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "containerDefinitions": [
+    {
+      "name": "colton-ingestion-container",
+      "image": "011528292014.dkr.ecr.us-east-1.amazonaws.com/colton-pipeline:latest",
+      "cpu": 0,
+      "essential": true,
+      "command": ["python", "pipeline/run_all.py"],
+      "environment": [
+        {
+          "name": "S3_BUCKET",
+          "value": "colton-bucket-prod"
+        }
+      ],
+      "secrets": [
+        {
+          "name": "OPENAI_API_KEY",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:011528292014:secret:colton/OpenAI_API_KEY-EpJCgz"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/colton-ingestion",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      }
+    }
+  ]
+}

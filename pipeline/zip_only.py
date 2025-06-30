@@ -55,7 +55,7 @@ def main():
         print("   -> Adding 'myresults/' …")
         zip_folder(zf, "myresults", arc_root="myresults")
 
-    print(f"✔ Done. Created `{zip_filename}` in the project root.")
+    print(f"Done. Created `{zip_filename}` in the project root.")
 
 if __name__ == "__main__":
     main()
