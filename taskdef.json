@@ -9,7 +9,7 @@
   "containerDefinitions": [
     {
       "name": "colton-ingestion-container",
-      "image": "011528292014.dkr.ecr.us-east-1.amazonaws.com/colton-pipeline:latest",
+      "image": "011528292014.dkr.ecr.us-east-1.amazonaws.com/colton-ingestion:all-scrapers-test",
       "cpu": 0,
       "essential": true,
       "command": ["python", "pipeline/run_all.py"],

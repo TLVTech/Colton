@@ -33,6 +33,7 @@ RUN apt-get update && \
     xdg-utils \
     awscli \
     chromium \
+    chromium-driver \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
