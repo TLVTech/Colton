@@ -15,7 +15,7 @@ SCRAPERS = [
     {"name": "five_star", "check": True},
     {"name": "jasper",    "check": True},
     {"name": "fyda",      "check": True},
-    {"name": "ftlgr",     "check": False},
+    {"name": "ftlgr",     "check": True},
     {"name": "shanes",    "check": False},
 ]
 

@@ -1,7 +1,7 @@
 # ---- BASE PYTHON IMAGE ----
 FROM python:3.10-slim-bullseye
 
-# ---- SYSTEM DEPENDENCIES ----
+# ---- SYSTEM DEPENDENCIES ---- 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     build-essential \
@@ -13,12 +13,14 @@ RUN apt-get update && \
     libglib2.0-0 \
     libsm6 \
     libxext6 \
+    libxrender1 \
     libxrender-dev \
     libpoppler-cpp-dev \
     libjpeg-dev \
     libappindicator3-1 \
     libasound2 \
     libatk1.0-0 \
+    libatk-bridge2.0-0 \
     libcups2 \
     libdbus-1-3 \
     libgdk-pixbuf2.0-0 \
@@ -32,10 +34,21 @@ RUN apt-get update && \
     libxss1 \
     xdg-utils \
     awscli \
+    libu2f-udev \
+    libvulkan1 \
+    libdrm2 \
+    libgbm1 \
+    libxshmfence1 \
+    libxml2 \
+    libxslt1.1 \
+    libxcb1 \
+    libxtst6 \
+    libgl1 \
     chromium \
     chromium-driver \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    --no-install-recommends && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
 # ---- ENVIRONMENT ----
 ENV LANG=en_US.UTF-8 \

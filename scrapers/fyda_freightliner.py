@@ -25,17 +25,16 @@ from selenium.common.exceptions import TimeoutException, WebDriverException
 # from selenium.webdriver.chrome.service import Service
 # from webdriver_manager.chrome import ChromeDriverManager
 # driver = webdriver.Chrome(options=opts)
+from core.output_fields import vehicle_attributes, diagram_attributes
 
 
 # CSV reconciliation (for output and reordering)
 from core.output import write_to_csv  # (If you use the utility version for writing rows)
-from core.image_utils import watermark_images
+from core.image_utils import extract_image_urls_from_page, download_images, watermark_images
+
 from pipeline.run_reconciliation import process_vehicle_data, reorder_and_save_results
 # ^ This assumes you want to use the main project version. If not, copy the latest version from that file.
 
-# Watermarking and image helpers
-from core.image_utils import watermark_images
-from core.watermark import add_watermark
 
 
 # watermark function (fallback if missing)
@@ -53,6 +52,28 @@ load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY", "")
 if not openai.api_key:
     raise RuntimeError("OPENAI_API_KEY is not set in the environment. Aborting.")
+
+
+# ----------------- All FYDA URLs  -----------------
+FYDA_CATEGORIES = {
+    "Cab & Chassis": "https://www.fydafreightliner.com/--xallinventory#page=xallinventory&vc=cab%20%26%20chassis",
+    "Cab & Chassis Trucks": "https://www.fydafreightliner.com/--xallinventory#page=xallinventory&vc=cab%20%26%20chassis%20trucks",
+    "Conventional Day Cab Trucks": "https://www.fydafreightliner.com/--xallinventory#page=xallinventory&vc=conventional%20day%20cab%20trucks",
+    "Conventional Trucks w/ Sleeper": "https://www.fydafreightliner.com/--xallinventory#page=xallinventory&vc=conventional%20trucks%20w%2F%20sleeper",
+    "Conventional Trucks w/o Sleeper": "https://www.fydafreightliner.com/--xallinventory#page=xallinventory&vc=conventional%20trucks%20w%2Fo%20sleeper",
+    "Conventional with Sleeper": "https://www.fydafreightliner.com/--xallinventory#page=xallinventory&vc=conventional%20with%20sleeper",
+    "Conventional without Sleeper": "https://www.fydafreightliner.com/--xallinventory#page=xallinventory&vc=conventional%20without%20sleeper",
+    "Day Cab": "https://www.fydafreightliner.com/--xallinventory#page=xallinventory&vc=day%20cab",
+    "Day Cab Tractors": "https://www.fydafreightliner.com/--xallinventory#page=xallinventory&vc=day%20cab%20tractors",
+    "On Highway": "https://www.fydafreightliner.com/--xallinventory#page=xallinventory&vc=on%20highway",
+    "Other": "https://www.fydafreightliner.com/--xallinventory#page=xallinventory&vc=other",
+    "Sleeper Tractors": "https://www.fydafreightliner.com/--xallinventory#page=xallinventory&vc=sleeper%20tractors",
+    "Tractor": "https://www.fydafreightliner.com/--xallinventory#page=xallinventory&vc=tractor",
+    "Tri-Drive": "https://www.fydafreightliner.com/--xallinventory#page=xallinventory&vc=tri-drive",
+    "Truck": "https://www.fydafreightliner.com/--xallinventory#page=xallinventory&vc=truck",
+    "sleeper": "https://www.fydafreightliner.com/commercial-trucks-vans-for-sale-ky-oh-pa--xNewInventory#page=xNewInventory&vc=sleeper"
+}
+# ---------------------------------------------------------------------
 
 
 # --------------------------------------------------
@@ -78,74 +99,87 @@ def get_driver():
     return driver
 
 #  --------------------------------------------------
-def get_listings():
-    urls, _ = get_target_listings("https://www.fydafreightliner.com/commercial-trucks-vans-for-sale-ky-oh-pa--xNewInventory#page=xNewInventory&vc=sleeper")
-    return urls
+# def get_listings():
+#     urls, _ = get_target_listings("https://www.fydafreightliner.com/commercial-trucks-vans-for-sale-ky-oh-pa--xNewInventory#page=xNewInventory&vc=sleeper")
+#     return urls
 
 # --------------------------------------------------
+
+# ----------------- Scrape FYDA listings -----------------
+def get_all_fyda_listings():
+    all_urls = set()
+    for category, url in FYDA_CATEGORIES.items():
+        print(f"Scraping FYDA category: {category}")
+        urls, _ = get_target_listings(url)
+        all_urls.update(urls)
+    print(f"Total unique listings collected: {len(all_urls)}")
+    return list(all_urls)
+# ----------------------------------------------------------------------------------
+
 # Download & watermark images
 # --------------------------------------------------
-def download_fyda_images(url, dest, stock_number, watermark_func=None):
-    """
-    Download all vehicle images into a subfolder named by stock_number.
-    Optionally apply a watermark function to each image.
-    Returns a list of downloaded image paths.
-    """
-    driver = get_driver()
-    # Create subfolder for this vehicle
-    vehicle_folder = os.path.join(dest, str(stock_number))
-    os.makedirs(vehicle_folder, exist_ok=True)
-    urls = []
+# def download_fyda_images(url, dest, stock_number, watermark_func=None):
+#     """
+#     Download all vehicle images into a subfolder named by stock_number.
+#     Optionally apply a watermark function to each image.
+#     Returns a list of downloaded image paths.
+#     """
+#     driver = get_driver()
+#     # Create subfolder for this vehicle
+#     vehicle_folder = os.path.join(dest, str(stock_number))
+#     os.makedirs(vehicle_folder, exist_ok=True)
+#     urls = []
 
-    try:
-        # Load vehicle page
-        driver.get(url)
-        time.sleep(5)
+#     try:
+#         # Load vehicle page
+#         driver.get(url)
+#         time.sleep(5)
 
-        # Collect URLs from div.background-image (if any)
-        for div in driver.find_elements(By.CSS_SELECTOR, "div.background-image"):
-            s = div.get_attribute("style")
-            m = re.search(r'url\((.*?)\)', s)
-            if m:
-                urls.append(m.group(1).strip('"\''))
+#         # Collect URLs from div.background-image (if any)
+#         for div in driver.find_elements(By.CSS_SELECTOR, "div.background-image"):
+#             s = div.get_attribute("style")
+#             m = re.search(r'url\((.*?)\)', s)
+#             if m:
+#                 urls.append(m.group(1).strip('"\''))
 
-        # Collect image src values from gallery and general <img> tags
-        for img in driver.find_elements(By.CSS_SELECTOR, "div.galleryImages img") + driver.find_elements(By.TAG_NAME, "img"):
-            src = img.get_attribute("src")
-            if src and "inventory" in src:
-                urls.append(src)
+#         # Collect image src values from gallery and general <img> tags
+#         for img in driver.find_elements(By.CSS_SELECTOR, "div.galleryImages img") + driver.find_elements(By.TAG_NAME, "img"):
+#             src = img.get_attribute("src")
+#             if src and "inventory" in src:
+#                 urls.append(src)
 
-        # Remove duplicates
-        urls = sorted(set(urls))
-        print(f"Found {len(urls)} images for {url}")
+#         # Remove duplicates
+#         urls = sorted(set(urls))
+#         print(f"Found {len(urls)} images for {url}")
 
-        # Download all found image URLs
-        paths = []
-        for i, u in enumerate(urls, 1):
-            ext = os.path.splitext(u.split("?", 1)[0])[1] or ".jpg"
-            fname = f"{stock_number}_{i}{ext}"
-            fpath = os.path.join(vehicle_folder, fname)
-            try:
-                r = requests.get(u, timeout=10)
-                r.raise_for_status()
-                with open(fpath, "wb") as f:
-                    f.write(r.content)
-                print(f"Downloaded {u} -> {fpath}")
-                # Optionally watermark
-                if watermark_func:
-                    watermarked = os.path.join(vehicle_folder, f"{stock_number}_{i}_wm{ext}")
-                    watermark_func(fpath, watermarked)
-                    print(f"Watermarked {watermarked}")
-                paths.append(fpath)
-            except Exception as e:
-                print(f"Failed to download {u}: {e}")
+#         # Download all found image URLs
+#         paths = []
+#         for i, u in enumerate(urls, 1):
+#             ext = os.path.splitext(u.split("?", 1)[0])[1] or ".jpg"
+#             fname = f"{stock_number}_{i}{ext}"
+#             fpath = os.path.join(vehicle_folder, fname)
+#             try:
+#                 r = requests.get(u, timeout=10)
+#                 r.raise_for_status()
+#                 with open(fpath, "wb") as f:
+#                     f.write(r.content)
+#                 print(f"Downloaded {u} -> {fpath}")
+#                 # Optionally watermark
+#                 if watermark_func:
+#                     watermarked = os.path.join(vehicle_folder, f"{stock_number}_{i}_wm{ext}")
+#                     watermark_func(fpath, watermarked)
+#                     print(f"Watermarked {watermarked}")
+#                 paths.append(fpath)
+#             except Exception as e:
+#                 print(f"Failed to download {u}: {e}")
 
-        return paths
+#         return paths
 
-    finally:
-        driver.quit()
+#     finally:
+#         driver.quit()
         
-        # original code 
+#         # original code 
+
 # --------------------------------------------------
 # 1) Extract JSON from text
 def extract_json(text):
@@ -954,10 +988,14 @@ def run(url, filename, filename2, imagefolder):
 
         if isinstance(extracted_info, dict):
             # Add URL and original description to the extracted info
-            extracted_info["Listing"] = url
+            # extracted_info["Listing"] = url
             extracted_info["Original info description"] = vehicle_text
 
             compliant_info = make_extracted_info_compliant(extracted_info)
+
+            compliant_info["original_image_url"] = url  # or set to image gallery URL if you have it
+
+
 
             # Get the stock number (prefer Stock Number, fallback to VIN, fallback to "unknown")
             stock_number = (
@@ -971,23 +1009,26 @@ def run(url, filename, filename2, imagefolder):
             print(f"Data to be written: {compliant_info}")
 
             # Write to main CSV
-            write_to_csv(compliant_info, None, filename)
+            write_to_csv([compliant_info], vehicle_attributes, filename)
 
             # Handle diagram info and write to CSV
             diagram_info = {"Listing": url}
             diagram_info2 = complete_diagram_info(diagram_info, compliant_info)
             if diagram_info2:
-                write_to_csv(diagram_info2, None, filename2)
+                write_to_csv([diagram_info2], diagram_attributes, filename2)
             else:
                 print(f"No diagram info generated for {url}")
 
             # Download images into per-truck subfolder
-            img_paths = download_fyda_images(url, imagefolder, stock_number)
+            # Extract image URLs using the new unified logic (dealer="fyda")
+            img_urls = extract_image_urls_from_page(url, dealer="fyda")
+            img_folder = os.path.join(imagefolder, str(stock_number))
+            img_paths = download_images(img_urls, img_folder, f"{stock_number}_")
             print(f"Downloaded {len(img_paths)} images for {url}")
+
 
             # Optional: watermark images into "watermarked" subfolder inside the per-truck folder
             if img_paths:
-                from core.image_utils import watermark_images  # adjust import if needed
                 watermarked_folder = os.path.join(imagefolder, str(stock_number), "watermarked")
                 os.makedirs(watermarked_folder, exist_ok=True)
                 watermark_images(img_paths, watermarked_folder, WATERMARK_PATH)
@@ -997,7 +1038,7 @@ def run(url, filename, filename2, imagefolder):
         print(f"Error processing {url}: {str(e)}")
 
 #  original code
-mylistings = get_listings()
+# mylistings = get_listings()
 
 def process_vehicle_data(vehicle_info_path, diagram_data_path, vehicle_info_org_path, mylistings):
     # Create single output directory
@@ -1109,7 +1150,6 @@ def process_vehicle_data(vehicle_info_path, diagram_data_path, vehicle_info_org_
 
 # original code
 #  --------------------------------------------------
-
 def reorder_and_save_results(vehicle_data, diagram_data, out_vinf, out_ddata):
     # Convert dictionaries to pandas DataFrames
     vehicle_df = pd.DataFrame(vehicle_data)
@@ -1277,7 +1317,7 @@ if __name__ == "__main__":
     os.makedirs("./results/images", exist_ok=True)
     os.makedirs("./results", exist_ok=True)
 
-    mylistings = get_listings()
+    mylistings = get_all_fyda_listings()
     for url in mylistings:
         run(
             url,

@@ -21,8 +21,8 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps, ImageFilter, ImageEnhance
 from PIL.Image import Resampling
 import io
 import cairosvg
+from core.output_fields import vehicle_attributes, diagram_attributes
 
-from core.output import write_to_csv
 
 
 # ── Load API key from environment ───────────────────────────────────────────────
@@ -37,76 +37,76 @@ WATERMARK_PATH = os.path.join('data', 'raw', 'group.png')
 
 # original function
 #  ── Image Watermarking ─────────────────────────────────────────────────────────
-def add_watermark(image_path, watermark_path, output_path, scale_factor=0.4, padding=60, opacity=0.35):
-    try:
-        # Load the base image and convert to RGBA
-        base_image = Image.open(image_path)
-        if base_image.format == 'WEBP' and base_image.mode != 'RGBA':
-            base_image = base_image.convert('RGBA')
-        elif base_image.mode != 'RGBA':
-            base_image = base_image.convert('RGBA')
+# def add_watermark(image_path, watermark_path, output_path, scale_factor=0.4, padding=60, opacity=0.35):
+#     try:
+#         # Load the base image and convert to RGBA
+#         base_image = Image.open(image_path)
+#         if base_image.format == 'WEBP' and base_image.mode != 'RGBA':
+#             base_image = base_image.convert('RGBA')
+#         elif base_image.mode != 'RGBA':
+#             base_image = base_image.convert('RGBA')
 
-        # Handle watermark based on file type
-        if watermark_path.lower().endswith('.svg'):
-            svg_data = cairosvg.svg2png(url=watermark_path)
-            watermark = Image.open(io.BytesIO(svg_data)).convert("RGBA")
-        else:
-            watermark = Image.open(watermark_path).convert("RGBA")
+#         # Handle watermark based on file type
+#         if watermark_path.lower().endswith('.svg'):
+#             svg_data = cairosvg.svg2png(url=watermark_path)
+#             watermark = Image.open(io.BytesIO(svg_data)).convert("RGBA")
+#         else:
+#             watermark = Image.open(watermark_path).convert("RGBA")
 
-        # Resize watermark
-        new_wm_width = int(base_image.width * scale_factor)
-        new_wm_height = int(new_wm_width * watermark.height / watermark.width)
-        watermark = watermark.resize((new_wm_width, new_wm_height), Resampling.LANCZOS)
+#         # Resize watermark
+#         new_wm_width = int(base_image.width * scale_factor)
+#         new_wm_height = int(new_wm_width * watermark.height / watermark.width)
+#         watermark = watermark.resize((new_wm_width, new_wm_height), Resampling.LANCZOS)
 
-        # Apply transparency to the watermark
-        watermark_with_opacity = Image.new('RGBA', watermark.size, (0, 0, 0, 0))
-        for x in range(watermark.width):
-            for y in range(watermark.height):
-                r, g, b, a = watermark.getpixel((x, y))
-                # Multiply the alpha channel by the opacity factor
-                watermark_with_opacity.putpixel((x, y), (r, g, b, int(a * opacity)))
+#         # Apply transparency to the watermark
+#         watermark_with_opacity = Image.new('RGBA', watermark.size, (0, 0, 0, 0))
+#         for x in range(watermark.width):
+#             for y in range(watermark.height):
+#                 r, g, b, a = watermark.getpixel((x, y))
+#                 # Multiply the alpha channel by the opacity factor
+#                 watermark_with_opacity.putpixel((x, y), (r, g, b, int(a * opacity)))
 
-        # Position watermark
-        pos = (
-            padding,
-            base_image.height - watermark_with_opacity.height - padding
-        )
+#         # Position watermark
+#         pos = (
+#             padding,
+#             base_image.height - watermark_with_opacity.height - padding
+#         )
 
-        # Create new image for composition
-        final_image = Image.new('RGBA', base_image.size, (0, 0, 0, 0))
-        final_image.paste(base_image, (0, 0))
-        final_image.paste(watermark_with_opacity, pos, watermark_with_opacity)
+#         # Create new image for composition
+#         final_image = Image.new('RGBA', base_image.size, (0, 0, 0, 0))
+#         final_image.paste(base_image, (0, 0))
+#         final_image.paste(watermark_with_opacity, pos, watermark_with_opacity)
 
-        # Convert and save based on output format
-        output_ext = os.path.splitext(output_path)[1].lower()
-        if output_ext == '.webp':
-            final_image.save(output_path, 'WEBP', lossless=True, quality=90)
-        else:
-            final_image = final_image.convert("RGB")
-            final_image.save(output_path)
+#         # Convert and save based on output format
+#         output_ext = os.path.splitext(output_path)[1].lower()
+#         if output_ext == '.webp':
+#             final_image.save(output_path, 'WEBP', lossless=True, quality=90)
+#         else:
+#             final_image = final_image.convert("RGB")
+#             final_image.save(output_path)
 
-        return output_path
-    except Exception as e:
-        raise Exception(f"Error processing image: {str(e)}")
+#         return output_path
+#     except Exception as e:
+#         raise Exception(f"Error processing image: {str(e)}")
 
 # original function
 #  ── Folder Processing ──────────────────────────────────────────────────────────
-def process_folder_watermark(input_folder, output_folder, watermark_path, scale_factor=0.60, padding=70, opacity=0.35):
-    if not os.path.exists(output_folder):
-        os.makedirs(output_folder)
+# def process_folder_watermark(input_folder, output_folder, watermark_path, scale_factor=0.60, padding=70, opacity=0.35):
+#     if not os.path.exists(output_folder):
+#         os.makedirs(output_folder)
 
-    supported_formats = ('.png', '.jpg', '.jpeg', '.bmp', '.tiff', '.webp')
+#     supported_formats = ('.png', '.jpg', '.jpeg', '.bmp', '.tiff', '.webp')
 
-    for filename in os.listdir(input_folder):
-        if filename.lower().endswith(supported_formats):
-            input_path = os.path.join(input_folder, filename)
-            output_path = os.path.join(output_folder, filename)
+#     for filename in os.listdir(input_folder):
+#         if filename.lower().endswith(supported_formats):
+#             input_path = os.path.join(input_folder, filename)
+#             output_path = os.path.join(output_folder, filename)
 
-            try:
-                add_watermark(input_path, watermark_path, output_path, scale_factor, padding, opacity)
-                print(f"Processed: {filename}")
-            except Exception as e:
-                print(f"Error processing {filename}: {str(e)}")
+#             try:
+#                 add_watermark(input_path, watermark_path, output_path, scale_factor, padding, opacity)
+#                 print(f"Processed: {filename}")
+#             except Exception as e:
+#                 print(f"Error processing {filename}: {str(e)}")
 
 
 # original function
@@ -922,92 +922,243 @@ def make_extracted_info_compliant(extracted_info):
 
 #  original function
 #  ── Step 6: Download images from the vehicle page ────────────────────────────────
-def download_images(url, folder_name):
-    import os
-    import requests
-    from bs4 import BeautifulSoup
-    import re
+# def download_images(url, folder_name):
+#     import os
+#     import requests
+#     from bs4 import BeautifulSoup
+#     import re
 
-    os.makedirs(folder_name, exist_ok=True)
+#     os.makedirs(folder_name, exist_ok=True)
 
-    try:
-        response = requests.get(url)
-        response.raise_for_status()
-        soup = BeautifulSoup(response.text, 'html.parser')
+#     try:
+#         response = requests.get(url)
+#         response.raise_for_status()
+#         soup = BeautifulSoup(response.text, 'html.parser')
 
-        # Find the div with id="photos"
-        photos_div = soup.find('div', id='photos')
-        if not photos_div:
-            print("No div with id='photos' found")
-            return
+#         # Find the div with id="photos"
+#         photos_div = soup.find('div', id='photos')
+#         if not photos_div:
+#             print("No div with id='photos' found")
+#             return
 
-        # Find all img tags and links that might contain images
-        image_elements = photos_div.find_all(['img', 'a'])
-        image_urls = []
+#         # Find all img tags and links that might contain images
+#         image_elements = photos_div.find_all(['img', 'a'])
+#         image_urls = []
 
-        # Extract URLs that contain 'xl'
-        for element in image_elements:
-            if element.name == 'img' and element.get('src'):
-                url = element['src']
-                if 'xl' in url.lower():
-                    image_urls.append(url)
+#         # Extract URLs that contain 'xl'
+#         for element in image_elements:
+#             if element.name == 'img' and element.get('src'):
+#                 url = element['src']
+#                 if 'xl' in url.lower():
+#                     image_urls.append(url)
 
-            if element.name == 'a' and element.get('href'):
-                href = element['href']
-                # Check for JavaScript function calls containing URLs
-                if 'javascript:' in href:
-                    # Extract URL from JavaScript function using regex
-                    matches = re.findall(r"'(https?://[^']+)'", href)
-                    for match in matches:
-                        if 'xl' in match.lower():
-                            image_urls.append(match)
-                elif 'xl' in href.lower():  # Direct URLs
-                    image_urls.append(href)
+#             if element.name == 'a' and element.get('href'):
+#                 href = element['href']
+#                 # Check for JavaScript function calls containing URLs
+#                 if 'javascript:' in href:
+#                     # Extract URL from JavaScript function using regex
+#                     matches = re.findall(r"'(https?://[^']+)'", href)
+#                     for match in matches:
+#                         if 'xl' in match.lower():
+#                             image_urls.append(match)
+#                 elif 'xl' in href.lower():  # Direct URLs
+#                     image_urls.append(href)
 
-        # Remove duplicates while preserving order
-        image_urls = list(dict.fromkeys(image_urls))
+#         # Remove duplicates while preserving order
+#         image_urls = list(dict.fromkeys(image_urls))
 
-        # Download images
-        for index, img_url in enumerate(image_urls, start=1):
-            try:
-                # Handle relative URLs
-                if not img_url.startswith(('http://', 'https://')):
-                    img_url = requests.compat.urljoin(url, img_url)
+#         # Download images
+#         for index, img_url in enumerate(image_urls, start=1):
+#             try:
+#                 # Handle relative URLs
+#                 if not img_url.startswith(('http://', 'https://')):
+#                     img_url = requests.compat.urljoin(url, img_url)
 
-                # Download image
-                img_response = requests.get(img_url)
-                img_response.raise_for_status()
+#                 # Download image
+#                 img_response = requests.get(img_url)
+#                 img_response.raise_for_status()
 
-                # Determine file extension from content type or URL
-                content_type = img_response.headers.get('content-type', '')
-                if 'jpeg' in content_type or 'jpg' in content_type:
-                    ext = 'jpg'
-                elif 'png' in content_type:
-                    ext = 'png'
-                else:
-                    # Try to get extension from URL
-                    ext = img_url.split('.')[-1].lower()
-                    if ext not in ['jpg', 'jpeg', 'png']:
-                        ext = 'jpg'  # Default to jpg
+#                 # Determine file extension from content type or URL
+#                 content_type = img_response.headers.get('content-type', '')
+#                 if 'jpeg' in content_type or 'jpg' in content_type:
+#                     ext = 'jpg'
+#                 elif 'png' in content_type:
+#                     ext = 'png'
+#                 else:
+#                     # Try to get extension from URL
+#                     ext = img_url.split('.')[-1].lower()
+#                     if ext not in ['jpg', 'jpeg', 'png']:
+#                         ext = 'jpg'  # Default to jpg
 
-                # Save image
-                file_path = os.path.join(folder_name, f"{index}.{ext}")
-                with open(file_path, 'wb') as f:
-                    f.write(img_response.content)
-                print(f"Downloaded image {index} to {file_path}")
+#                 # Save image
+#                 file_path = os.path.join(folder_name, f"{index}.{ext}")
+#                 with open(file_path, 'wb') as f:
+#                     f.write(img_response.content)
+#                 print(f"Downloaded image {index} to {file_path}")
 
-            except Exception as e:
-                print(f"Error downloading image {index}: {str(e)}")
+#             except Exception as e:
+#                 print(f"Error downloading image {index}: {str(e)}")
 
-        print(f"Downloaded {len(image_urls)} images to {folder_name}")
+#         print(f"Downloaded {len(image_urls)} images to {folder_name}")
 
-    except Exception as e:
-        print(f"Error accessing URL: {str(e)}")
+#     except Exception as e:
+#         print(f"Error accessing URL: {str(e)}")
 
 
 
 
 # ── Step 7: "run()" orchestrator ───────────────────────────────────────────────
+# def run(url, filename, filename2, imagefolder):
+#     vehicle_text = get_vehicle_page_html(url)
+#     print(vehicle_text)
+#     extracted_info = extract_vehicle_info(vehicle_text)
+
+#     # Ensure extracted_info is a dictionary before assigning
+#     if isinstance(extracted_info, dict):
+#         extracted_info["Original info description"] = vehicle_text
+#         print("\nExtracted Vehicle Information:")
+#         print("-----------------------------")
+#         print(json.dumps(extracted_info, indent=2))
+
+#         # Only proceed with compliance check and CSV writing if we have valid data
+#         compliant_info = make_extracted_info_compliant(extracted_info)
+#         print("\nCompliant Vehicle Information:")
+#         print("-----------------------------")
+#         print(json.dumps(compliant_info, indent=2))
+
+#         attributes = ["Company Address",
+#                       "ECM Miles",
+#                       "Engine Displacement",
+#                       "Engine Horsepower",
+#                       "Engine Hours",
+#                       "Engine Model",
+#                       "Engine Serial Number",
+#                       "Engine Torque",
+#                       "Front Axle Capacity",
+#                       "Fuel Capacity",
+#                       "glider",
+#                       "Listing",
+#                       "Location",
+#                       "Not Active",
+#                       "Odometer Miles",
+#                       "OS - Axle Configuration",
+#                       "OS - Brake System Type",
+#                       "OS - Engine Make",
+#                       "OS - Fifth Wheel Type",
+#                       "OS - Front Suspension Type",
+#                       "OS - Fuel Type",
+#                       "OS - Number of Front Axles",
+#                       "OS - Number of Fuel Tanks",
+#                       "OS - Number of Rear Axles",
+#                       "OS - Rear Suspension Type",
+#                       "OS - Sleeper or Day Cab",
+#                       "OS - Transmission Make",
+#                       "OS - Transmission Speeds",
+#                       "OS - Transmission Type",
+#                       "OS - Vehicle Class",
+#                       "OS - Vehicle Condition",
+#                       "OS - Vehicle Make",
+#                       "OS - Vehicle Make Logo",
+#                       "OS - Vehicle Type",
+#                       "OS - Vehicle Year",
+#                       "Rear Axle Capacity",
+#                       "Rear Axle Ratio",
+#                       "Ref Number",
+#                       "Stock Number",
+#                       "Transmission Model",
+#                       "U.S. State",
+#                       "U.S. State (text)",
+#                       "Vehicle model - new",
+#                       "Vehicle Price",
+#                       "Vehicle Year",
+#                       "VehicleVIN",
+#                       "Wheelbase",
+#                       "Original info description",
+#                       "original_image_url"]
+        
+
+#         compliant_info["original_image_url"] = url
+#         compliant_info["dealerName"] = "jasper"
+#         write_to_csv([compliant_info], attributes, "results/vehicleinfo.csv")
+#         print('AAAAAAAAAaaaaaaa')
+
+#         diagram_info = {}
+#         diagram_info["Listing"] = url
+#         attributes2 = ["Listing",
+#                        "R1 Brake Type",
+#                        "R1 Dual Tires",
+#                        "R1 Lift Axle",
+#                        "R1 Power Axle",
+#                        "R1 Steer Axle",
+#                        "R1 Tire Size",
+#                        "R1 Wheel Material",
+#                        "R2 Brake Type",
+#                        "R2 Dual Tires",
+#                        "R2 Lift Axle",
+#                        "R2 Power Axle",
+#                        "R2 Steer Axle",
+#                        "R2 Tire Size",
+#                        "R2 Wheel Material",
+#                        "R3 Brake Type",
+#                        "R3 Dual Tires",
+#                        "R3 Lift Axle",
+#                        "R3 Power Axle",
+#                        "R3 Steer Axle",
+#                        "R3 Tire Size",
+#                        "R3 Wheel Material",
+#                        "R4 Brake Type",
+#                        "R4 Dual Tires",
+#                        "R4 Lift Axle",
+#                        "R4 Power Axle",
+#                        "R4 Steer Axle",
+#                        "R4 Tire Size",
+#                        "R4 Wheel Material",
+#                        "F5 Brake Type",
+#                        "F5 Dual Tires",
+#                        "F5 Lift Axle",
+#                        "F5 Power Axle",
+#                        "F5 Steer Axle",
+#                        "F5 Tire Size",
+#                        "F5 Wheel Material",
+#                        "F6 Brake Type",
+#                        "F6 Dual Tires",
+#                        "F6 Lift Axle",
+#                        "F6 Power Axle",
+#                        "F6 Steer Axle",
+#                        "F6 Tire Size",
+#                        "F6 Wheel Material",
+#                        "F7 Brake Type",
+#                        "F7 Dual Tires",
+#                        "F7 Lift Axle",
+#                        "F7 Power Axle",
+#                        "F7 Steer Axle",
+#                        "F7 Tire Size",
+#                        "F7 Wheel Material",
+#                        "F8 Brake Type",
+#                        "F8 Dual Tires",
+#                        "F8 Lift Axle",
+#                        "F8 Power Axle",
+#                        "F8 Steer Axle",
+#                        "F8 Tire Size",
+#                        "F8 Wheel Material",
+#                        "original_image_url"]
+
+#         diagram_info2 = complete_diagram_info(diagram_info, compliant_info)
+#         print('diagram_info before writing2')
+#         print(diagram_info2)
+#         print("attribute2")
+#         print(attributes2)
+#         write_to_csv([diagram_info2], attributes2, filename2)
+
+#         path1 = imagefolder + '/' + compliant_info['Stock Number']
+#         os.makedirs(path1, exist_ok=True)
+#         download_images(url, path1)
+#         process_folder_watermark(path1, path1 + '-watermarked', WATERMARK_PATH, scale_factor=0.4, padding=60)
+#     else:
+#         print("No valid information extracted")
+#         print("Skipping CSV writing due to extraction failure")
+
+
 def run(url, filename, filename2, imagefolder):
     vehicle_text = get_vehicle_page_html(url)
     print(vehicle_text)
@@ -1026,137 +1177,145 @@ def run(url, filename, filename2, imagefolder):
         print("-----------------------------")
         print(json.dumps(compliant_info, indent=2))
 
-        attributes = ["Company Address",
-                      "ECM Miles",
-                      "Engine Displacement",
-                      "Engine Horsepower",
-                      "Engine Hours",
-                      "Engine Model",
-                      "Engine Serial Number",
-                      "Engine Torque",
-                      "Front Axle Capacity",
-                      "Fuel Capacity",
-                      "glider",
-                      "Listing",
-                      "Location",
-                      "Not Active",
-                      "Odometer Miles",
-                      "OS - Axle Configuration",
-                      "OS - Brake System Type",
-                      "OS - Engine Make",
-                      "OS - Fifth Wheel Type",
-                      "OS - Front Suspension Type",
-                      "OS - Fuel Type",
-                      "OS - Number of Front Axles",
-                      "OS - Number of Fuel Tanks",
-                      "OS - Number of Rear Axles",
-                      "OS - Rear Suspension Type",
-                      "OS - Sleeper or Day Cab",
-                      "OS - Transmission Make",
-                      "OS - Transmission Speeds",
-                      "OS - Transmission Type",
-                      "OS - Vehicle Class",
-                      "OS - Vehicle Condition",
-                      "OS - Vehicle Make",
-                      "OS - Vehicle Make Logo",
-                      "OS - Vehicle Type",
-                      "OS - Vehicle Year",
-                      "Rear Axle Capacity",
-                      "Rear Axle Ratio",
-                      "Ref Number",
-                      "Stock Number",
-                      "Transmission Model",
-                      "U.S. State",
-                      "U.S. State (text)",
-                      "Vehicle model - new",
-                      "Vehicle Price",
-                      "Vehicle Year",
-                      "VehicleVIN",
-                      "Wheelbase",
-                      "Original info description",
-                      "original_image_url"]
-        
+        # attributes = ["Company Address",
+        #               "ECM Miles",
+        #               "Engine Displacement",
+        #               "Engine Horsepower",
+        #               "Engine Hours",
+        #               "Engine Model",
+        #               "Engine Serial Number",
+        #               "Engine Torque",
+        #               "Front Axle Capacity",
+        #               "Fuel Capacity",
+        #               "glider",
+        #               "Listing",
+        #               "Location",
+        #               "Not Active",
+        #               "Odometer Miles",
+        #               "OS - Axle Configuration",
+        #               "OS - Brake System Type",
+        #               "OS - Engine Make",
+        #               "OS - Fifth Wheel Type",
+        #               "OS - Front Suspension Type",
+        #               "OS - Fuel Type",
+        #               "OS - Number of Front Axles",
+        #               "OS - Number of Fuel Tanks",
+        #               "OS - Number of Rear Axles",
+        #               "OS - Rear Suspension Type",
+        #               "OS - Sleeper or Day Cab",
+        #               "OS - Transmission Make",
+        #               "OS - Transmission Speeds",
+        #               "OS - Transmission Type",
+        #               "OS - Vehicle Class",
+        #               "OS - Vehicle Condition",
+        #               "OS - Vehicle Make",
+        #               "OS - Vehicle Make Logo",
+        #               "OS - Vehicle Type",
+        #               "OS - Vehicle Year",
+        #               "Rear Axle Capacity",
+        #               "Rear Axle Ratio",
+        #               "Ref Number",
+        #               "Stock Number",
+        #               "Transmission Model",
+        #               "U.S. State",
+        #               "U.S. State (text)",
+        #               "Vehicle model - new",
+        #               "Vehicle Price",
+        #               "Vehicle Year",
+        #               "VehicleVIN",
+        #               "Wheelbase",
+        #               "Original info description",
+        #               "original_image_url"]
 
         compliant_info["original_image_url"] = url
         compliant_info["dealerName"] = "jasper"
-        write_to_csv([compliant_info], attributes, "results/vehicleinfo.csv")
+        write_to_csv([compliant_info], vehicle_attributes, "results/vehicleinfo.csv")
         print('AAAAAAAAAaaaaaaa')
 
         diagram_info = {}
         diagram_info["Listing"] = url
-        attributes2 = ["Listing",
-                       "R1 Brake Type",
-                       "R1 Dual Tires",
-                       "R1 Lift Axle",
-                       "R1 Power Axle",
-                       "R1 Steer Axle",
-                       "R1 Tire Size",
-                       "R1 Wheel Material",
-                       "R2 Brake Type",
-                       "R2 Dual Tires",
-                       "R2 Lift Axle",
-                       "R2 Power Axle",
-                       "R2 Steer Axle",
-                       "R2 Tire Size",
-                       "R2 Wheel Material",
-                       "R3 Brake Type",
-                       "R3 Dual Tires",
-                       "R3 Lift Axle",
-                       "R3 Power Axle",
-                       "R3 Steer Axle",
-                       "R3 Tire Size",
-                       "R3 Wheel Material",
-                       "R4 Brake Type",
-                       "R4 Dual Tires",
-                       "R4 Lift Axle",
-                       "R4 Power Axle",
-                       "R4 Steer Axle",
-                       "R4 Tire Size",
-                       "R4 Wheel Material",
-                       "F5 Brake Type",
-                       "F5 Dual Tires",
-                       "F5 Lift Axle",
-                       "F5 Power Axle",
-                       "F5 Steer Axle",
-                       "F5 Tire Size",
-                       "F5 Wheel Material",
-                       "F6 Brake Type",
-                       "F6 Dual Tires",
-                       "F6 Lift Axle",
-                       "F6 Power Axle",
-                       "F6 Steer Axle",
-                       "F6 Tire Size",
-                       "F6 Wheel Material",
-                       "F7 Brake Type",
-                       "F7 Dual Tires",
-                       "F7 Lift Axle",
-                       "F7 Power Axle",
-                       "F7 Steer Axle",
-                       "F7 Tire Size",
-                       "F7 Wheel Material",
-                       "F8 Brake Type",
-                       "F8 Dual Tires",
-                       "F8 Lift Axle",
-                       "F8 Power Axle",
-                       "F8 Steer Axle",
-                       "F8 Tire Size",
-                       "F8 Wheel Material",
-                       "original_image_url"]
+        # attributes2 = ["Listing",
+        #                "R1 Brake Type",
+        #                "R1 Dual Tires",
+        #                "R1 Lift Axle",
+        #                "R1 Power Axle",
+        #                "R1 Steer Axle",
+        #                "R1 Tire Size",
+        #                "R1 Wheel Material",
+        #                "R2 Brake Type",
+        #                "R2 Dual Tires",
+        #                "R2 Lift Axle",
+        #                "R2 Power Axle",
+        #                "R2 Steer Axle",
+        #                "R2 Tire Size",
+        #                "R2 Wheel Material",
+        #                "R3 Brake Type",
+        #                "R3 Dual Tires",
+        #                "R3 Lift Axle",
+        #                "R3 Power Axle",
+        #                "R3 Steer Axle",
+        #                "R3 Tire Size",
+        #                "R3 Wheel Material",
+        #                "R4 Brake Type",
+        #                "R4 Dual Tires",
+        #                "R4 Lift Axle",
+        #                "R4 Power Axle",
+        #                "R4 Steer Axle",
+        #                "R4 Tire Size",
+        #                "R4 Wheel Material",
+        #                "F5 Brake Type",
+        #                "F5 Dual Tires",
+        #                "F5 Lift Axle",
+        #                "F5 Power Axle",
+        #                "F5 Steer Axle",
+        #                "F5 Tire Size",
+        #                "F5 Wheel Material",
+        #                "F6 Brake Type",
+        #                "F6 Dual Tires",
+        #                "F6 Lift Axle",
+        #                "F6 Power Axle",
+        #                "F6 Steer Axle",
+        #                "F6 Tire Size",
+        #                "F6 Wheel Material",
+        #                "F7 Brake Type",
+        #                "F7 Dual Tires",
+        #                "F7 Lift Axle",
+        #                "F7 Power Axle",
+        #                "F7 Steer Axle",
+        #                "F7 Tire Size",
+        #                "F7 Wheel Material",
+        #                "F8 Brake Type",
+        #                "F8 Dual Tires",
+        #                "F8 Lift Axle",
+        #                "F8 Power Axle",
+        #                "F8 Steer Axle",
+        #                "F8 Tire Size",
+        #                "F8 Wheel Material",
+        #                "original_image_url"]
 
         diagram_info2 = complete_diagram_info(diagram_info, compliant_info)
         print('diagram_info before writing2')
         print(diagram_info2)
-        print("attribute2")
-        print(attributes2)
-        write_to_csv([diagram_info2], attributes2, filename2)
+        print("diagram_attributes")
+        print(diagram_attributes)
+        write_to_csv([diagram_info2], diagram_attributes, filename2)
 
-        path1 = imagefolder + '/' + compliant_info['Stock Number']
+        # -------------- CHANGED BLOCK BELOW --------------
+        path1 = os.path.join(imagefolder, compliant_info['Stock Number'])
         os.makedirs(path1, exist_ok=True)
-        download_images(url, path1)
-        process_folder_watermark(path1, path1 + '-watermarked', WATERMARK_PATH, scale_factor=0.4, padding=60)
+        image_urls = extract_image_urls_from_page(url, dealer="jasper")
+        download_images(image_urls, path1)
+        # List all downloaded image paths
+        image_files = [os.path.join(path1, f) for f in os.listdir(path1) if f.lower().endswith(('.jpg', '.jpeg', '.png', '.webp'))]
+        # Call watermark_images to process them
+        watermark_images(image_files, path1 + '-watermarked', WATERMARK_PATH)
+
+        # -------------- END CHANGED BLOCK ----------------
+
     else:
         print("No valid information extracted")
         print("Skipping CSV writing due to extraction failure")
+
 
 
 if __name__ == "__main__":

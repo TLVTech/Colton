@@ -5,3 +5,8 @@ results/
 myresults/
 *.zip
 .env
+*.csv
+*.png
+*.jpg
+
+

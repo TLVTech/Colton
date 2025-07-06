@@ -13,15 +13,15 @@ sys.stderr.reconfigure(encoding="utf-8")
 # Import all available scrapers here
 from scrapers.jasper_trucks import get_target_listings as get_jasper_listings, run as run_jasper
 from scrapers.five_star_trucks import get_listings as get_five_star_listings, run as run_five_star
-#from scrapers.ftlgr_trucks import get_listings as get_ftlgr_listings, run as run_ftlgr
-from scrapers.fyda_freightliner import get_listings as get_fyda_listings, run as run_fyda
+from scrapers.ftlgr_trucks import get_listings as get_ftlgr_listings, run as run_ftlgr
+from scrapers.fyda_freightliner import get_all_fyda_listings as get_fyda_listings, run as run_fyda
 #from scrapers.shanes_equipment import get_listings as get_shanes_listings, run as run_shanes
 
 # Available scrapers dictionary for dynamic selection
 SCRAPERS = {
     "jasper":        (get_jasper_listings, run_jasper),
     "five_star":     (get_five_star_listings, run_five_star),
-    # "ftlgr":         (get_ftlgr_listings, run_ftlgr),
+    "ftlgr":         (get_ftlgr_listings, run_ftlgr),
     "fyda":          (get_fyda_listings, run_fyda),
     # "shanes_equipment": (get_shanes_listings, run_shanes)
 }

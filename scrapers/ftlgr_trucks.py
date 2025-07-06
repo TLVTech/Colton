@@ -1,39 +1,8 @@
 """
 ================================================================================
-Colton Project – FTLGR Scraper: Selenium/Requests/Cloudflare Anti-Bot Advisory
+Colton Project – FTLGR Scraper
 ================================================================================
-
-Summary of Changes & Findings
------------------------------
-• Tested multiple approaches for scraping https://www.ftlgr.com/trucks-for-sale/:
-    1. Requests with browser-like headers (403 Forbidden – blocked by Cloudflare).
-    2. Selenium with undetected-chromedriver (headless and visible mode).
-    3. Selector and page structure debugging.
-• Confirmed site is protected by Cloudflare’s advanced bot detection:
-    - All automation tools (Selenium, Playwright) are blocked.
-    - Browser automation, even in non-headless mode, is denied access.
-    - Manual browser access works, but automated tools are consistently blocked.
-• Results: No truck listing links can be scraped programmatically using standard methods.
-
-Options Considered
-------------------
-A. Manual Cookie Injection: Tried, but Cloudflare protection quickly invalidates cookies/sessions.
-B. Residential Proxies: Viable for large-scale and persistent scraping, but requires paid proxy service.
-C. API/Data Vendor: Not available for this dealer, but ideal if possible.
-D. Manual Export: Possible for small-scale or demo runs, not scalable.
-E. Cloud Browser/Proxy Service (e.g. ScraperAPI, ScrapingBee): Can work, but requires a paid plan.
-
-Next Steps
-----------
--> **Best solution:** Integrate a residential or rotating proxy service in conjunction with Selenium, Playwright, or requests.
-    - This is the only scalable approach for Cloudflare-protected automotive dealer sites.
-    - Most production-grade automotive data vendors use this method.
--> Until proxy integration is complete, test pipeline with manually pasted listing URLs if necessary.
-
 """
-
-
-
 import os
 import json
 import re
@@ -46,10 +15,17 @@ from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 
 # --- For Selenium browser automation ---
-import undetected_chromedriver as uc
+# import undetected_chromedriver as uc
+from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+# -- For JSON extraction ---
+from core.output import write_to_csv
+from core.normalization import complete_diagram_info
+from core.image_utils import extract_image_urls_from_page, download_images as util_download_images, watermark_images
+# -- For output fields ---
+from core.output_fields import vehicle_attributes, diagram_attributes
 
 # --- Disable SSL Warnings ---
 import urllib3
@@ -62,26 +38,131 @@ openai.api_key = os.getenv("OPENAI_API_KEY", "")
 if not openai.api_key:
     raise RuntimeError("OPENAI_API_KEY is not set. Aborting.")
 
-# ----- STEP 1: Collect all FTLGR URLs (Selenium-powered) -----
+
+
+from seleniumwire import webdriver  # Use seleniumwire for proxy auth
+
+def get_driver_with_brightdata_proxy():
+    PROXY_HOST = os.environ.get("BRIGHTDATA_PROXY_HOST")
+    PROXY_PORT = int(os.environ.get("BRIGHTDATA_PROXY_PORT"))
+    PROXY_USER = os.environ.get("BRIGHTDATA_PROXY_USER")
+    PROXY_PASS = os.environ.get("BRIGHTDATA_PROXY_PASS")
+
+    seleniumwire_options = {
+        'proxy': {
+            'http': f'http://{PROXY_USER}:{PROXY_PASS}@{PROXY_HOST}:{PROXY_PORT}',
+            'https': f'https://{PROXY_USER}:{PROXY_PASS}@{PROXY_HOST}:{PROXY_PORT}',
+            'no_proxy': 'localhost,127.0.0.1'
+        }
+    }
+
+    options = webdriver.ChromeOptions()
+    options.add_argument('--headless=new')  # Remove this line if you want to see the browser
+    options.add_argument('--disable-gpu')
+    options.add_argument('--window-size=1920,1080')
+    options.add_argument('--disable-blink-features=AutomationControlled')
+    options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    options.add_experimental_option("useAutomationExtension", False)
+
+    driver = webdriver.Chrome(options=options, seleniumwire_options=seleniumwire_options)
+    driver.set_page_load_timeout(120)
+    return driver
+
+# Utility to create Chrome proxy auth extension on the fly
+def create_proxy_auth_extension(proxy_host, proxy_port, proxy_username, proxy_password):
+    import zipfile, tempfile, os
+    pluginfile = tempfile.NamedTemporaryFile(suffix='.zip', delete=False)
+    manifest_json = """
+    {
+        "version": "1.0.0",
+        "manifest_version": 2,
+        "name": "Chrome Proxy",
+        "permissions": [
+            "proxy",
+            "tabs",
+            "unlimitedStorage",
+            "storage",
+            "<all_urls>",
+            "webRequest",
+            "webRequestBlocking"
+        ],
+        "background": {
+            "scripts": ["background.js"]
+        }
+    }
+    """
+    background_js = f"""
+    var config = {{
+            mode: "fixed_servers",
+            rules: {{
+              singleProxy: {{
+                scheme: "http",
+                host: "{proxy_host}",
+                port: parseInt({proxy_port})
+              }},
+              bypassList: ["localhost"]
+            }}
+          }};
+    chrome.proxy.settings.set({{value: config, scope: "regular"}}, function() {{}});
+    function callbackFn(details) {{
+        return {{
+            authCredentials: {{
+                username: "{proxy_username}",
+                password: "{proxy_password}"
+            }}
+        }};
+    }}
+    chrome.webRequest.onAuthRequired.addListener(
+        callbackFn,
+        {{urls: ["<all_urls>"]}},
+        ['blocking']
+    );
+    """
+    with zipfile.ZipFile(pluginfile.name, 'w') as zp:
+        zp.writestr("manifest.json", manifest_json)
+        zp.writestr("background.js", background_js)
+    return pluginfile.name
+
+# Helper function to find the most relevant option from a list based on similarity
+def extract_json(raw):
+    """
+    Attempts to extract the first JSON object from a string (even if wrapped in ```).
+    """
+    try:
+        # Remove code block markers if present
+        cleaned = re.sub(r"^```json|^```|\s*```$", "", raw.strip())
+        # Try to load directly
+        return json.loads(cleaned)
+    except Exception:
+        # Fallback: try to extract with a regex
+        match = re.search(r"\{.*\}", raw, re.DOTALL)
+        if match:
+            try:
+                return json.loads(match.group())
+            except Exception:
+                return {}
+        return {}
+
 
 def get_sleeper_listings():
     """
-    Paginate through sleeper pages using Selenium (undetected-chromedriver) and collect truck URLs.
+    Paginate through sleeper pages using Selenium (with Bright Data proxy) and collect truck URLs.
     """
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.support.ui import WebDriverWait
+    from selenium.webdriver.support import expected_conditions as EC
+    from urllib.parse import urljoin
+    import time
+
     base_url = "https://www.ftlgr.com/trucks-for-sale/?type=sleeper"
     links = set()
-    options = uc.ChromeOptions()
-    options.headless = False  # Set to False for debugging
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    driver = uc.Chrome(options=options)
+    driver = get_driver_with_brightdata_proxy()  # Use proxy driver
 
     driver.get(base_url)
     page_num = 1
 
     while True:
         print(f"[Selenium] Scraping page {page_num}: {driver.current_url}")
-        # Wait until page loaded, then grab listing links
         try:
             WebDriverWait(driver, 10).until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, "a.page-link"))
@@ -91,7 +172,8 @@ def get_sleeper_listings():
 
         # Collect truck links
         for a in driver.find_elements(By.CSS_SELECTOR, "a[href^='/trucks/?vid=']"):
-            full_url = "https://www.ftlgr.com" + a.get_attribute("href")
+            href = a.get_attribute("href")
+            full_url = urljoin("https://www.ftlgr.com", href)
             links.add(full_url)
 
         # Try to click "Next" (not disabled)
@@ -103,7 +185,7 @@ def get_sleeper_listings():
             next_btn.click()
             time.sleep(2)
             page_num += 1
-        except Exception as e:
+        except Exception:
             print("[Selenium] No more pages or could not find Next button. Done paginating.")
             break
 
@@ -111,24 +193,26 @@ def get_sleeper_listings():
     print(f"[get_sleeper_listings] Total sleeper listings: {len(links)}")
     return list(links)
 
+
 def get_daycab_listings():
     """
-    Paginate through daycab pages using Selenium and collect truck URLs.
+    Paginate through daycab pages using Selenium (with Bright Data proxy) and collect truck URLs.
     """
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.support.ui import WebDriverWait
+    from selenium.webdriver.support import expected_conditions as EC
+    from urllib.parse import urljoin
+    import time
+
     base_url = "https://www.ftlgr.com/trucks-for-sale/?type=daycab"
     links = set()
-    options = uc.ChromeOptions()
-    options.headless = True  # Set to False for debugging
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    driver = uc.Chrome(options=options)
+    driver = get_driver_with_brightdata_proxy()  # Use proxy driver
 
     driver.get(base_url)
     page_num = 1
 
     while True:
         print(f"[Selenium] Scraping page {page_num}: {driver.current_url}")
-        # Wait until page loaded, then grab listing links
         try:
             WebDriverWait(driver, 10).until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, "a.page-link"))
@@ -138,7 +222,8 @@ def get_daycab_listings():
 
         # Collect truck links
         for a in driver.find_elements(By.CSS_SELECTOR, "a[href^='/trucks/?vid=']"):
-            full_url = "https://www.ftlgr.com" + a.get_attribute("href")
+            href = a.get_attribute("href")
+            full_url = urljoin("https://www.ftlgr.com", href)
             links.add(full_url)
 
         # Try to click "Next" (not disabled)
@@ -150,13 +235,29 @@ def get_daycab_listings():
             next_btn.click()
             time.sleep(2)
             page_num += 1
-        except Exception as e:
+        except Exception:
             print("[Selenium] No more pages or could not find Next button. Done paginating.")
             break
 
     driver.quit()
     print(f"[get_daycab_listings] Total daycab listings: {len(links)}")
     return list(links)
+
+
+# ── Helper function to find the most relevant option based on similarity ─────────────
+def find_most_relevant_option(input_value, options):
+    best_match = None
+    highest_score = 0
+
+    for option in options:
+        # Calculate similarity score
+        score = difflib.SequenceMatcher(None, input_value, option).ratio()
+        if score > highest_score:
+            highest_score = score
+            best_match = option
+
+    return best_match
+
 
 def get_listings():
     """
@@ -177,61 +278,35 @@ def get_listings():
     print(f"[get_listings] Total unique listings: {len(all_listings)}\n")
     return list(all_listings)
 
-# ── CSV Writer ──────────────────────────────────────────────────────────────────
-def writeToCSV(data, attributes, filename):
-    """
-    Append a list of dicts (or a single dict) to CSV `filename`. If `filename`
-    does not exist or is empty, write a header row first.
-    """
-    if isinstance(data, dict):
-        data = [data]
-
-    if not attributes:
-        attrs = set()
-        for row in data:
-            attrs.update(row.keys())
-        attributes = sorted(attrs)
-
-    parent = os.path.dirname(filename)
-    if parent:
-        os.makedirs(parent, exist_ok=True)
-
-    file_empty = not os.path.exists(filename) or os.path.getsize(filename) == 0
-
-    with open(filename, mode="a", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=attributes)
-        if file_empty:
-            writer.writeheader()
-        for row in data:
-            out_row = {attr: row.get(attr, "") for attr in attributes}
-            writer.writerow(out_row)
-
-
 # ── Step 2: Fetch raw text for one “ftlgr” listing ───────────────────────────────
 def get_vehicle_page_html(url: str) -> str:
     """
     Fetch the HTML from a single FTLGR listing and attempt to extract visible text.
-    We look for known container classes/IDs first; if nothing is found, we fall back
-    to body text with header/footer removed.
     """
     try:
         session = requests.Session()
         headers = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-    ),
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-    "Accept-Language": "en-US,en;q=0.9",
-    "Accept-Encoding": "gzip, deflate, br",
-    "Connection": "keep-alive",
-    "Upgrade-Insecure-Requests": "1",
-    "Referer": "https://www.ftlgr.com/",
-    "Origin": "https://www.ftlgr.com",
-}
-        resp = session.get(url, headers=headers, allow_redirects=True, timeout=30, verify=False)
-        resp.raise_for_status()
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+            ),
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Connection": "keep-alive",
+            "Upgrade-Insecure-Requests": "1",
+            "Referer": "https://www.ftlgr.com/",
+            "Origin": "https://www.ftlgr.com",
+        }
 
+        # Bright Data proxy config (from env)
+        proxies = {
+            "http": f"http://{os.environ['BRIGHTDATA_PROXY_USER']}:{os.environ['BRIGHTDATA_PROXY_PASS']}@{os.environ['BRIGHTDATA_PROXY_HOST']}:{os.environ['BRIGHTDATA_PROXY_PORT']}",
+            "https": f"http://{os.environ['BRIGHTDATA_PROXY_USER']}:{os.environ['BRIGHTDATA_PROXY_PASS']}@{os.environ['BRIGHTDATA_PROXY_HOST']}:{os.environ['BRIGHTDATA_PROXY_PORT']}",
+        }
+
+        resp = session.get(url, headers=headers, allow_redirects=True, timeout=30, verify=False, proxies=proxies)
+        resp.raise_for_status()
         soup = BeautifulSoup(resp.text, "lxml")
         text_content = ""
 
@@ -266,7 +341,6 @@ def get_vehicle_page_html(url: str) -> str:
     except Exception as e:
         print(f"[get_vehicle_page_html] Error fetching {url}: {e}")
         return ""
-
 
 # ── Step 3: Use OpenAI to extract JSON from raw text ──────────────────────────────
 def extract_vehicle_info(text: str) -> dict:
@@ -335,7 +409,6 @@ Just above the phone number is “City, ST.” Use the ST abbreviation to set bo
     except Exception as e:
         print(f"[extract_vehicle_info] OpenAI error: {e}")
         return {}
-
 
 # ── Step 4: Enforce field constraints ───────────────────────────────────────────────
 def make_extracted_info_compliant(extracted_info: dict) -> dict:
@@ -481,55 +554,6 @@ def make_extracted_info_compliant(extracted_info: dict) -> dict:
         compliant[fld] = convert_value(v, cst)
     return compliant
 
-
-# ── Step 5: Download all FTLGR images ────────────────────────────────────────────
-def download_images(url: str, folder_name: str) -> None:
-    """
-    Given a listing URL, find the main image (.mainimage) + any .carousel‐item/thumb images.
-    Save them to folder_name/ as main_image.jpg, 1.jpg, 2.jpg, etc.
-    """
-    os.makedirs(folder_name, exist_ok=True)
-    resp = requests.get(url)
-    resp.raise_for_status()
-    soup = BeautifulSoup(resp.text, "html.parser")
-
-    # 1) main image
-    main_img = soup.find("img", class_="mainimage")
-    if main_img and main_img.get("src") and not main_img["src"].startswith("data:"):
-        href = urljoin(url, main_img["src"])
-        try:
-            r2 = requests.get(href)
-            r2.raise_for_status()
-            with open(os.path.join(folder_name, "main_image.jpg"), "wb") as f:
-                f.write(r2.content)
-            print(f"[download_images] Downloaded main_image.jpg")
-        except Exception as e:
-            print(f"[download_images] Error downloading main image: {e}")
-
-    # 2) carousel items
-    car_items = soup.find_all("div", class_="carousel-item")
-    print(f"[download_images] Found {len(car_items)} carousel items")
-    for idx, c in enumerate(car_items, start=1):
-        img = c.find("img", class_="thumb")
-        if not img or not img.get("src"):
-            continue
-        thumb_url = img["src"]
-        full_url = thumb_url.replace("/TH_", "/")
-        full_url = urljoin(url, full_url)
-        try:
-            r3 = requests.get(full_url)
-            r3.raise_for_status()
-            ext = os.path.splitext(full_url)[1].lower() or ".jpg"
-            outname = os.path.join(folder_name, f"{idx}{ext}")
-            with open(outname, "wb") as f:
-                f.write(r3.content)
-            print(f"[download_images] Downloaded {os.path.basename(outname)}")
-        except Exception as e:
-            print(f"[download_images] Error downloading {full_url}: {e}")
-
-    print("[download_images] Done.")
-
-
 # ── Step 6: run() orchestrator ───────────────────────────────────────────────────
 def run(
     listing_url: str,
@@ -562,53 +586,67 @@ def run(
     os.makedirs(os.path.dirname(diagram_csv), exist_ok=True)
 
     # 1) Write “vehicle” CSV row
-    vehicle_fields = [
-        "Company Address","ECM Miles","Engine Displacement","Engine Horsepower","Engine Hours",
-        "Engine Model","Engine Serial Number","Engine Torque","Front Axle Capacity","Fuel Capacity",
-        "glider","Listing","Location","Not Active","Odometer Miles","OS - Axle Configuration",
-        "OS - Brake System Type","OS - Engine Make","OS - Fifth Wheel Type","OS - Front Suspension Type",
-        "OS - Fuel Type","OS - Number of Front Axles","OS - Number of Fuel Tanks","OS - Number of Rear Axles",
-        "OS - Rear Suspension Type","OS - Sleeper or Day Cab","OS - Transmission Make","OS - Transmission Speeds",
-        "OS - Transmission Type","OS - Vehicle Class","OS - Vehicle Condition","OS - Vehicle Make",
-        "OS - Vehicle Make Logo","OS - Vehicle Type","OS - Vehicle Year","Rear Axle Capacity","Rear Axle Ratio",
-        "Ref Number","Stock Number","Transmission Model","U.S. State","U.S. State (text)",
-        "Vehicle model - new","Vehicle Price","Vehicle Year","VehicleVIN","Wheelbase",
-        "Original info description","original_image_url"
-    ]
+    # vehicle_fields = [
+    #     "Company Address","ECM Miles","Engine Displacement","Engine Horsepower","Engine Hours",
+    #     "Engine Model","Engine Serial Number","Engine Torque","Front Axle Capacity","Fuel Capacity",
+    #     "glider","Listing","Location","Not Active","Odometer Miles","OS - Axle Configuration",
+    #     "OS - Brake System Type","OS - Engine Make","OS - Fifth Wheel Type","OS - Front Suspension Type",
+    #     "OS - Fuel Type","OS - Number of Front Axles","OS - Number of Fuel Tanks","OS - Number of Rear Axles",
+    #     "OS - Rear Suspension Type","OS - Sleeper or Day Cab","OS - Transmission Make","OS - Transmission Speeds",
+    #     "OS - Transmission Type","OS - Vehicle Class","OS - Vehicle Condition","OS - Vehicle Make",
+    #     "OS - Vehicle Make Logo","OS - Vehicle Type","OS - Vehicle Year","Rear Axle Capacity","Rear Axle Ratio",
+    #     "Ref Number","Stock Number","Transmission Model","U.S. State","U.S. State (text)",
+    #     "Vehicle model - new","Vehicle Price","Vehicle Year","VehicleVIN","Wheelbase",
+    #     "Original info description","original_image_url"
+    # ]
+
     compliant["original_image_url"] = listing_url
-    writeToCSV(compliant, vehicle_fields, veh_info_csv)
+    write_to_csv(compliant, vehicle_attributes, veh_info_csv)
 
     # 2) Write “diagram” CSV row
     diag_info = {"Listing": listing_url, "original_image_url": listing_url}
-    diag_fields = [
-        "Listing","R1 Brake Type","R1 Dual Tires","R1 Lift Axle","R1 Power Axle","R1 Steer Axle",
-        "R1 Tire Size","R1 Wheel Material","R2 Brake Type","R2 Dual Tires","R2 Lift Axle","R2 Power Axle",
-        "R2 Steer Axle","R2 Tire Size","R2 Wheel Material","R3 Brake Type","R3 Dual Tires","R3 Lift Axle",
-        "R3 Power Axle","R3 Steer Axle","R3 Tire Size","R3 Wheel Material","R4 Brake Type","R4 Dual Tires",
-        "R4 Lift Axle","R4 Power Axle","R4 Steer Axle","R4 Tire Size","R4 Wheel Material","F5 Brake Type",
-        "F5 Dual Tires","F5 Lift Axle","F5 Power Axle","F5 Steer Axle","F5 Tire Size","F5 Wheel Material",
-        "F6 Brake Type","F6 Dual Tires","F6 Lift Axle","F6 Power Axle","F6 Steer Axle","F6 Tire Size",
-        "F6 Wheel Material","F7 Brake Type","F7 Dual Tires","F7 Lift Axle","F7 Power Axle","F7 Steer Axle",
-        "F7 Tire Size","F7 Wheel Material","F8 Brake Type","F8 Dual Tires","F8 Lift Axle","F8 Power Axle",
-        "F8 Steer Axle","F8 Tire Size","F8 Wheel Material","original_image_url"
-    ]
-    filled = complete_diagram_info({}, compliant)
-    filled["Listing"] = listing_url
-    writeToCSV(filled, diag_fields, diagram_csv)
+    # diag_fields = [
+    #     "Listing","R1 Brake Type","R1 Dual Tires","R1 Lift Axle","R1 Power Axle","R1 Steer Axle",
+    #     "R1 Tire Size","R1 Wheel Material","R2 Brake Type","R2 Dual Tires","R2 Lift Axle","R2 Power Axle",
+    #     "R2 Steer Axle","R2 Tire Size","R2 Wheel Material","R3 Brake Type","R3 Dual Tires","R3 Lift Axle",
+    #     "R3 Power Axle","R3 Steer Axle","R3 Tire Size","R3 Wheel Material","R4 Brake Type","R4 Dual Tires",
+    #     "R4 Lift Axle","R4 Power Axle","R4 Steer Axle","R4 Tire Size","R4 Wheel Material","F5 Brake Type",
+    #     "F5 Dual Tires","F5 Lift Axle","F5 Power Axle","F5 Steer Axle","F5 Tire Size","F5 Wheel Material",
+    #     "F6 Brake Type","F6 Dual Tires","F6 Lift Axle","F6 Power Axle","F6 Steer Axle","F6 Tire Size",
+    #     "F6 Wheel Material","F7 Brake Type","F7 Dual Tires","F7 Lift Axle","F7 Power Axle","F7 Steer Axle",
+    #     "F7 Tire Size","F7 Wheel Material","F8 Brake Type","F8 Dual Tires","F8 Lift Axle","F8 Power Axle",
+    #     "F8 Steer Axle","F8 Tire Size","F8 Wheel Material","original_image_url"
+    # ]
 
-    # 3) Download & watermark images
+    filled = complete_diagram_info({}, compliant)
+    if not filled:
+        filled = {}
+    filled["Listing"] = listing_url
+    write_to_csv(filled, diagram_attributes, diagram_csv)
+
+    # 3) Download & watermark images (using utility function)
     stock = str(compliant.get("Stock Number", "")).strip()
     if stock:
         target = os.path.join(image_folder_root, stock)
-        download_images(listing_url, target)
 
-        from core.watermark import process_folder_watermark
-        watermark_path = os.path.join("data", "raw", "group.png")
-        processtarget = f"{target}-watermarked"
-        process_folder_watermark(target, processtarget, watermark_path)
+        # USE THE DEALER ARGUMENT HERE!
+        from core.image_utils import extract_image_urls_from_page, download_images, watermark_images
+
+        # Get list of all image URLs using utility (set dealer="ftlgr" here)
+        image_urls = extract_image_urls_from_page(listing_url, dealer="ftlgr")
+        if not image_urls:
+            print(f"[run] No image URLs found for {listing_url}")
+        else:
+            # Download all images to the target folder
+            # downloaded_paths = download_images(image_urls, target)
+            downloaded_paths = download_images(image_urls, target, dealer="ftlgr")
+            # Watermark downloaded images into <target>-watermarked folder
+            watermark_path = os.path.join("data", "raw", "group.png")
+            watermarked_folder = f"{target}-watermarked"
+            watermark_images(downloaded_paths, watermarked_folder, watermark_path)
     else:
         print(f"[run] No Stock Number for {listing_url}; skipping images.")
-
+    
 
 # ── If you ever want a “standalone test” in this file ─────────────────────────────
 if __name__ == "__main__":
@@ -618,5 +656,5 @@ if __name__ == "__main__":
         print(f"[__main__] {idx}/{len(listings)} -> {url}")
         os.makedirs("results", exist_ok=True)
         os.makedirs("results/images", exist_ok=True)
-        run(url, "results/vehiculinfo.csv", "results/diagram.csv", "results/images")
+        run(url, "results/vehicleinfo.csv", "results/diagram.csv", "results/images")
         print("-" * 70)
