@@ -81,7 +81,7 @@ FYDA_CATEGORIES = {
 # --------------------------------------------------
 def get_driver():
     opts = webdriver.ChromeOptions()
-    opts.add_argument("--headless=new")  # For Chrome 109+, or just "--headless" for older
+    opts.add_argument("--headless")  
     opts.add_argument("--no-sandbox")
     opts.add_argument("--disable-dev-shm-usage")
     opts.add_argument("--disable-gpu")

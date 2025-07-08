@@ -39,8 +39,8 @@ if not openai.api_key:
     raise RuntimeError("OPENAI_API_KEY is not set. Aborting.")
 
 
-
 from seleniumwire import webdriver  # Use seleniumwire for proxy auth
+
 
 def get_driver_with_brightdata_proxy():
     PROXY_HOST = os.environ.get("BRIGHTDATA_PROXY_HOST")
@@ -57,7 +57,9 @@ def get_driver_with_brightdata_proxy():
     }
 
     options = webdriver.ChromeOptions()
-    options.add_argument('--headless=new')  # Remove this line if you want to see the browser
+    options.add_argument('--headless=new')  # or just '--headless' if error persists
+    options.add_argument('--no-sandbox')
+    options.add_argument('--disable-dev-shm-usage')
     options.add_argument('--disable-gpu')
     options.add_argument('--window-size=1920,1080')
     options.add_argument('--disable-blink-features=AutomationControlled')
