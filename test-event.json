@@ -1,0 +1,10 @@
+[
+  {
+    "Source": "aws.events",
+    "DetailType": "Scheduled Event",
+    "Resources": [
+      "arn:aws:events:us-east-1:011528292014:rule/run-jasper-daily"
+    ],
+    "Detail": "{}"
+  }
+]

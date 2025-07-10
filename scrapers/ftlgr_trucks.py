@@ -557,6 +557,98 @@ def make_extracted_info_compliant(extracted_info: dict) -> dict:
     return compliant
 
 # ── Step 6: run() orchestrator ───────────────────────────────────────────────────
+# def run(
+#     listing_url: str,
+#     veh_info_csv: str,
+#     diagram_csv: str,
+#     image_folder_root: str,
+# ) -> None:
+#     """
+#     1. Fetch raw text (get_vehicle_page_html)
+#     2. extract with OpenAI -> make_extracted_info_compliant
+#     3. Write both vehicle CSV row + diagram CSV row
+#     4. Download all images under image_folder_root/<Stock Number>/
+#     5. Watermark each image (group.png assumed at data/raw/group.png)
+#     """
+#     vehicle_text = get_vehicle_page_html(listing_url)
+#     if not vehicle_text:
+#         print(f"[run] No text for {listing_url}; skipping.")
+#         return
+
+#     extracted = extract_vehicle_info(vehicle_text)
+#     if not isinstance(extracted, dict):
+#         print(f"[run] Extraction returned non‐dict for {listing_url}; skipping.")
+#         return
+
+#     extracted["Original info description"] = vehicle_text
+#     compliant = make_extracted_info_compliant(extracted)
+
+#     # Ensure results folders exist
+#     os.makedirs(os.path.dirname(veh_info_csv), exist_ok=True)
+#     os.makedirs(os.path.dirname(diagram_csv), exist_ok=True)
+
+#     # 1) Write “vehicle” CSV row
+#     # vehicle_fields = [
+#     #     "Company Address","ECM Miles","Engine Displacement","Engine Horsepower","Engine Hours",
+#     #     "Engine Model","Engine Serial Number","Engine Torque","Front Axle Capacity","Fuel Capacity",
+#     #     "glider","Listing","Location","Not Active","Odometer Miles","OS - Axle Configuration",
+#     #     "OS - Brake System Type","OS - Engine Make","OS - Fifth Wheel Type","OS - Front Suspension Type",
+#     #     "OS - Fuel Type","OS - Number of Front Axles","OS - Number of Fuel Tanks","OS - Number of Rear Axles",
+#     #     "OS - Rear Suspension Type","OS - Sleeper or Day Cab","OS - Transmission Make","OS - Transmission Speeds",
+#     #     "OS - Transmission Type","OS - Vehicle Class","OS - Vehicle Condition","OS - Vehicle Make",
+#     #     "OS - Vehicle Make Logo","OS - Vehicle Type","OS - Vehicle Year","Rear Axle Capacity","Rear Axle Ratio",
+#     #     "Ref Number","Stock Number","Transmission Model","U.S. State","U.S. State (text)",
+#     #     "Vehicle model - new","Vehicle Price","Vehicle Year","VehicleVIN","Wheelbase",
+#     #     "Original info description","original_image_url"
+#     # ]
+
+#     compliant["original_image_url"] = listing_url
+#     write_to_csv(compliant, vehicle_attributes, veh_info_csv)
+
+#     # 2) Write “diagram” CSV row
+#     diag_info = {"Listing": listing_url, "original_image_url": listing_url}
+#     # diag_fields = [
+#     #     "Listing","R1 Brake Type","R1 Dual Tires","R1 Lift Axle","R1 Power Axle","R1 Steer Axle",
+#     #     "R1 Tire Size","R1 Wheel Material","R2 Brake Type","R2 Dual Tires","R2 Lift Axle","R2 Power Axle",
+#     #     "R2 Steer Axle","R2 Tire Size","R2 Wheel Material","R3 Brake Type","R3 Dual Tires","R3 Lift Axle",
+#     #     "R3 Power Axle","R3 Steer Axle","R3 Tire Size","R3 Wheel Material","R4 Brake Type","R4 Dual Tires",
+#     #     "R4 Lift Axle","R4 Power Axle","R4 Steer Axle","R4 Tire Size","R4 Wheel Material","F5 Brake Type",
+#     #     "F5 Dual Tires","F5 Lift Axle","F5 Power Axle","F5 Steer Axle","F5 Tire Size","F5 Wheel Material",
+#     #     "F6 Brake Type","F6 Dual Tires","F6 Lift Axle","F6 Power Axle","F6 Steer Axle","F6 Tire Size",
+#     #     "F6 Wheel Material","F7 Brake Type","F7 Dual Tires","F7 Lift Axle","F7 Power Axle","F7 Steer Axle",
+#     #     "F7 Tire Size","F7 Wheel Material","F8 Brake Type","F8 Dual Tires","F8 Lift Axle","F8 Power Axle",
+#     #     "F8 Steer Axle","F8 Tire Size","F8 Wheel Material","original_image_url"
+#     # ]
+
+#     filled = complete_diagram_info({}, compliant)
+#     if not filled:
+#         filled = {}
+#     filled["Listing"] = listing_url
+#     write_to_csv(filled, diagram_attributes, diagram_csv)
+
+#     # 3) Download & watermark images (using utility function)
+#     stock = str(compliant.get("Stock Number", "")).strip()
+#     if stock:
+#         target = os.path.join(image_folder_root, stock)
+
+#         # USE THE DEALER ARGUMENT HERE!
+#         from core.image_utils import extract_image_urls_from_page, download_images, watermark_images
+
+#         # Get list of all image URLs using utility (set dealer="ftlgr" here)
+#         image_urls = extract_image_urls_from_page(listing_url, dealer="ftlgr")
+#         if not image_urls:
+#             print(f"[run] No image URLs found for {listing_url}")
+#         else:
+#             # Download all images to the target folder
+#             # downloaded_paths = download_images(image_urls, target)
+#             downloaded_paths = download_images(image_urls, target, dealer="ftlgr")
+#             # Watermark downloaded images into <target>-watermarked folder
+#             watermark_path = os.path.join("data", "raw", "group.png")
+#             watermarked_folder = f"{target}-watermarked"
+#             watermark_images(downloaded_paths, watermarked_folder, watermark_path)
+#     else:
+#         print(f"[run] No Stock Number for {listing_url}; skipping images.")
+    
 def run(
     listing_url: str,
     veh_info_csv: str,
@@ -564,17 +656,19 @@ def run(
     image_folder_root: str,
 ) -> None:
     """
-    1. Fetch raw text (get_vehicle_page_html)
-    2. extract with OpenAI -> make_extracted_info_compliant
-    3. Write both vehicle CSV row + diagram CSV row
-    4. Download all images under image_folder_root/<Stock Number>/
-    5. Watermark each image (group.png assumed at data/raw/group.png)
+    Robust run function for ftlgr:
+    - Skips listings with HTTP errors (e.g. 403 Forbidden) instead of crashing the whole scraper.
+    - Logs which listings failed and continues with the rest.
+    - Extracts vehicle info, writes to CSVs, downloads & watermarks images as before.
     """
+
+    # Step 1: Fetch raw text
     vehicle_text = get_vehicle_page_html(listing_url)
     if not vehicle_text:
         print(f"[run] No text for {listing_url}; skipping.")
         return
 
+    # Step 2: Extract info with OpenAI
     extracted = extract_vehicle_info(vehicle_text)
     if not isinstance(extracted, dict):
         print(f"[run] Extraction returned non‐dict for {listing_url}; skipping.")
@@ -583,72 +677,47 @@ def run(
     extracted["Original info description"] = vehicle_text
     compliant = make_extracted_info_compliant(extracted)
 
-    # Ensure results folders exist
+    # Step 3: Ensure output folders exist
     os.makedirs(os.path.dirname(veh_info_csv), exist_ok=True)
     os.makedirs(os.path.dirname(diagram_csv), exist_ok=True)
 
-    # 1) Write “vehicle” CSV row
-    # vehicle_fields = [
-    #     "Company Address","ECM Miles","Engine Displacement","Engine Horsepower","Engine Hours",
-    #     "Engine Model","Engine Serial Number","Engine Torque","Front Axle Capacity","Fuel Capacity",
-    #     "glider","Listing","Location","Not Active","Odometer Miles","OS - Axle Configuration",
-    #     "OS - Brake System Type","OS - Engine Make","OS - Fifth Wheel Type","OS - Front Suspension Type",
-    #     "OS - Fuel Type","OS - Number of Front Axles","OS - Number of Fuel Tanks","OS - Number of Rear Axles",
-    #     "OS - Rear Suspension Type","OS - Sleeper or Day Cab","OS - Transmission Make","OS - Transmission Speeds",
-    #     "OS - Transmission Type","OS - Vehicle Class","OS - Vehicle Condition","OS - Vehicle Make",
-    #     "OS - Vehicle Make Logo","OS - Vehicle Type","OS - Vehicle Year","Rear Axle Capacity","Rear Axle Ratio",
-    #     "Ref Number","Stock Number","Transmission Model","U.S. State","U.S. State (text)",
-    #     "Vehicle model - new","Vehicle Price","Vehicle Year","VehicleVIN","Wheelbase",
-    #     "Original info description","original_image_url"
-    # ]
-
+    # Step 4: Write “vehicle” CSV row
     compliant["original_image_url"] = listing_url
     write_to_csv(compliant, vehicle_attributes, veh_info_csv)
 
-    # 2) Write “diagram” CSV row
-    diag_info = {"Listing": listing_url, "original_image_url": listing_url}
-    # diag_fields = [
-    #     "Listing","R1 Brake Type","R1 Dual Tires","R1 Lift Axle","R1 Power Axle","R1 Steer Axle",
-    #     "R1 Tire Size","R1 Wheel Material","R2 Brake Type","R2 Dual Tires","R2 Lift Axle","R2 Power Axle",
-    #     "R2 Steer Axle","R2 Tire Size","R2 Wheel Material","R3 Brake Type","R3 Dual Tires","R3 Lift Axle",
-    #     "R3 Power Axle","R3 Steer Axle","R3 Tire Size","R3 Wheel Material","R4 Brake Type","R4 Dual Tires",
-    #     "R4 Lift Axle","R4 Power Axle","R4 Steer Axle","R4 Tire Size","R4 Wheel Material","F5 Brake Type",
-    #     "F5 Dual Tires","F5 Lift Axle","F5 Power Axle","F5 Steer Axle","F5 Tire Size","F5 Wheel Material",
-    #     "F6 Brake Type","F6 Dual Tires","F6 Lift Axle","F6 Power Axle","F6 Steer Axle","F6 Tire Size",
-    #     "F6 Wheel Material","F7 Brake Type","F7 Dual Tires","F7 Lift Axle","F7 Power Axle","F7 Steer Axle",
-    #     "F7 Tire Size","F7 Wheel Material","F8 Brake Type","F8 Dual Tires","F8 Lift Axle","F8 Power Axle",
-    #     "F8 Steer Axle","F8 Tire Size","F8 Wheel Material","original_image_url"
-    # ]
-
+    # Step 5: Write “diagram” CSV row
     filled = complete_diagram_info({}, compliant)
     if not filled:
         filled = {}
     filled["Listing"] = listing_url
     write_to_csv(filled, diagram_attributes, diagram_csv)
 
-    # 3) Download & watermark images (using utility function)
+    # Step 6: Download & watermark images
     stock = str(compliant.get("Stock Number", "")).strip()
     if stock:
         target = os.path.join(image_folder_root, stock)
 
-        # USE THE DEALER ARGUMENT HERE!
+        # Import utils
         from core.image_utils import extract_image_urls_from_page, download_images, watermark_images
 
-        # Get list of all image URLs using utility (set dealer="ftlgr" here)
-        image_urls = extract_image_urls_from_page(listing_url, dealer="ftlgr")
-        if not image_urls:
-            print(f"[run] No image URLs found for {listing_url}")
-        else:
-            # Download all images to the target folder
-            # downloaded_paths = download_images(image_urls, target)
-            downloaded_paths = download_images(image_urls, target, dealer="ftlgr")
-            # Watermark downloaded images into <target>-watermarked folder
-            watermark_path = os.path.join("data", "raw", "group.png")
-            watermarked_folder = f"{target}-watermarked"
-            watermark_images(downloaded_paths, watermarked_folder, watermark_path)
+        # === CHANGES HERE: Robust try/except around image URL extraction/download ===
+        try:
+            # Get all image URLs (HTTP/403 errors handled here)
+            image_urls = extract_image_urls_from_page(listing_url, dealer="ftlgr")
+            if not image_urls:
+                print(f"[run] No image URLs found for {listing_url}")
+            else:
+                downloaded_paths = download_images(image_urls, target, dealer="ftlgr")
+                watermark_path = os.path.join("data", "raw", "group.png")
+                watermarked_folder = f"{target}-watermarked"
+                watermark_images(downloaded_paths, watermarked_folder, watermark_path)
+        except Exception as e:
+            print(f"[ftlgr][ERROR] Failed to process images for {listing_url}: {e}")
+            # Skips only image download for this listing; continues pipeline.
+            return
     else:
         print(f"[run] No Stock Number for {listing_url}; skipping images.")
-    
+
 
 # ── If you ever want a “standalone test” in this file ─────────────────────────────
 if __name__ == "__main__":

@@ -4,8 +4,8 @@
   "taskRoleArn": "arn:aws:iam::011528292014:role/ecsTaskExecutionRole",
   "networkMode": "awsvpc",
   "requiresCompatibilities": ["FARGATE"],
-  "cpu": "512",
-  "memory": "1024",
+  "cpu": "2048",
+  "memory": "4096",
   "containerDefinitions": [
     {
       "name": "colton-ingestion-container",
@@ -17,6 +17,46 @@
         {
           "name": "S3_BUCKET",
           "value": "colton-bucket-prod"
+        },
+        {
+          "name": "BRIGHTDATA_HOST",
+          "value": "brd.superproxy.io"
+        },
+        {
+          "name": "BRIGHTDATA_PORT",
+          "value": "33335"
+        },
+        {
+          "name": "BRIGHTDATA_USER",
+          "value": "brd-customer-hl_7e560da0-zone-aresi"
+        },
+        {
+          "name": "BRIGHTDATA_PASS",
+          "value": "3el9pzsn1tl8"
+        },
+        {
+          "name": "BRIGHTDATA_PROXY_HOST",
+          "value": "brd.superproxy.io"
+        },
+        {
+          "name": "BRIGHTDATA_PROXY_PORT",
+          "value": "33335"
+        },
+        {
+          "name": "BRIGHTDATA_PROXY_USER",
+          "value": "brd-customer-hl_7e560da0-zone-residential_proxy_1"
+        },
+        {
+          "name": "BRIGHTDATA_PROXY_PASS",
+          "value": "z0lycmag2k0c"
+        },
+        {
+          "name": "BRIGHTDATA_API_KEY",
+          "value": "24b5c8102efcbc27e93429e9f18ba9a8bef51251357b3c1ae93773f303138b60"
+        },
+        {
+          "name": "BD_ZONE",
+          "value": "aresi"
         }
       ],
       "secrets": [

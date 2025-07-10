@@ -910,25 +910,98 @@ def download_gallery_images(url, folder_name):
 # original function
 # ── Helper function to write JSON to CSV ────────────────────────────────────────
 # ── (A) 1) Get all listing URLs ────────────────────────────────────────────────
+# def get_listings():
+#     url = "https://www.5startrucksales.us/semi-trucks/"
+#     headers = {'User-Agent': 'Mozilla/5.0'}
+
+#     try:
+#         response = requests.get(url, headers=headers, verify=False) # verify=False to ignore SSL warnings,   i added this to avoid SSL errors 
+#         response.raise_for_status()
+
+#         soup = BeautifulSoup(response.text, 'html.parser')
+#         links = soup.find_all('a', href=True)
+
+#         truck_links = [link['href'] for link in links
+#                       if link['href'].startswith('https://www.5startrucksales.us/trucks')]
+
+#         return truck_links
+
+#     except Exception as e:
+#         print(f"Error: {e}")
+#         return []
+
+
 def get_listings():
+    """
+    Step 1: Try using Bright Data proxy from environment variables.
+    Step 2: If forbidden, retry with no proxy.
+    Each strategy is clearly commented for future debugging and tracking.
+    """
     url = "https://www.5startrucksales.us/semi-trucks/"
-    headers = {'User-Agent': 'Mozilla/5.0'}
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
+    }
+    # Set up proxies from env (.env loaded by dotenv or ECS task env)
+    proxy_host = os.environ.get("BRIGHTDATA_PROXY_HOST")
+    proxy_port = os.environ.get("BRIGHTDATA_PROXY_PORT")
+    proxy_user = os.environ.get("BRIGHTDATA_PROXY_USER")
+    proxy_pass = os.environ.get("BRIGHTDATA_PROXY_PASS")
+    use_proxy = all([proxy_host, proxy_port, proxy_user, proxy_pass])
+    links = []
 
+    # --------------- Attempt 1: Bright Data Proxy --------------------
+    if use_proxy:
+        proxies = {
+            "http": f"http://{proxy_user}:{proxy_pass}@{proxy_host}:{proxy_port}",
+            "https": f"http://{proxy_user}:{proxy_pass}@{proxy_host}:{proxy_port}",
+        }
+        print("[five_star][proxy] Trying Bright Data proxy first.")
+        try:
+            response = requests.get(url, headers=headers, proxies=proxies, timeout=45, verify=False)
+            print(f"[five_star][proxy] Status code: {response.status_code}")
+            if response.status_code == 403:
+                print("[five_star][proxy] Proxy forbidden, will try direct (local) request next.")
+                raise Exception("Proxy forbidden")
+            with open("results/five_star_debug_proxy.html", "w", encoding="utf-8") as f:
+                f.write(response.text)
+            response.raise_for_status()
+            soup = BeautifulSoup(response.text, "html.parser")
+            links = [a["href"] for a in soup.find_all("a", href=True)
+                        if "/trucks/" in a["href"] or "www.5startrucksales.us/trucks/" in a["href"]]
+            print(f"[five_star][proxy] Found {len(links)} truck links.")
+            # Only return if we got links!
+            if links:
+                return [href if href.startswith("http") else f"https://www.5startrucksales.us{href}" for href in links]
+        except Exception as e:
+            print(f"[five_star][proxy] ERROR: {e} -- Will now try direct (no-proxy) fetch.")
+
+    # --------------- Attempt 2: No Proxy --------------------
+    print("[five_star][direct] Trying direct (local) request.")
     try:
-        response = requests.get(url, headers=headers, verify=False) # verify=False to ignore SSL warnings,   i added this to avoid SSL errors 
+        response = requests.get(url, headers=headers, timeout=45)
+        print(f"[five_star][direct] Status code: {response.status_code}")
+        if os.environ.get('FIVESTAR_DEBUG', '0') == '1':
+            with open("results/five_star_debug_direct.html", "w", encoding="utf-8") as f:
+                f.write(response.text)
+
         response.raise_for_status()
-
-        soup = BeautifulSoup(response.text, 'html.parser')
-        links = soup.find_all('a', href=True)
-
-        truck_links = [link['href'] for link in links
-                      if link['href'].startswith('https://www.5startrucksales.us/trucks')]
-
-        return truck_links
-
+        soup = BeautifulSoup(response.text, "html.parser")
+        links = [a["href"] for a in soup.find_all("a", href=True)
+                    if "/trucks/" in a["href"] or "www.5startrucksales.us/trucks/" in a["href"]]
+        print(f"[five_star][direct] Found {len(links)} truck links.")
+        return [href if href.startswith("http") else f"https://www.5startrucksales.us{href}" for href in links]
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"[five_star][direct] ERROR: {e}")
         return []
+
+# -------------- CHANGE LOG -----------------
+# - First tries Bright Data proxy (from .env)
+# - If proxy is forbidden or fails, retries locally without proxy
+# - Writes debug HTML for both attempts to results/ for later inspection
+# - Clearly logs which path is running for easy debugging
+# - You can swap proxy zone in .env to test new zones without code change
+
+
 
 # original function
 # ── (A) 2) Get all listing URLs for a single condition ──────────────────────────
