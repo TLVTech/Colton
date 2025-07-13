@@ -25,4 +25,10 @@ temp_images/
 .vscode/
 .idea/
 clean-secret.json
-clean-secret.json
+
+# Node.js dependencies
+package-lock.json
+package.json
+node_modules/
+
+scripts/ # Ignore all scripts in the scripts directory 

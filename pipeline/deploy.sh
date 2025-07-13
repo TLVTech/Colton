@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # ─── Configuration ──────────────────────────────────────────────
-SCRAPER_NAME="ftlgr"  # <--- CHANGE THIS for each run: fyda, five_star, jasper, ftlgr, shanes_equipment
+SCRAPER_NAME="five_star"  # <--- CHANGE THIS for each run: fyda, five_star, jasper, ftlgr, shanes_equipment
 AWS_REGION="us-east-1"
 AWS_ACCOUNT_ID="011528292014"
 ECR_REPO="colton-ingestion"

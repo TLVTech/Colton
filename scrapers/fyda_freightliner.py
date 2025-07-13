@@ -35,8 +35,6 @@ from core.image_utils import extract_image_urls_from_page, download_images, wate
 from pipeline.run_reconciliation import process_vehicle_data, reorder_and_save_results
 # ^ This assumes you want to use the main project version. If not, copy the latest version from that file.
 
-
-
 # watermark function (fallback if missing)
 try:
     from core.watermark import add_watermark
@@ -73,9 +71,6 @@ FYDA_CATEGORIES = {
     "Truck": "https://www.fydafreightliner.com/--xallinventory#page=xallinventory&vc=truck",
     "sleeper": "https://www.fydafreightliner.com/commercial-trucks-vans-for-sale-ky-oh-pa--xNewInventory#page=xNewInventory&vc=sleeper"
 }
-# ---------------------------------------------------------------------
-
-
 # --------------------------------------------------
 # Selenium driver setup
 # --------------------------------------------------
@@ -98,12 +93,6 @@ def get_driver():
     driver.set_page_load_timeout(30)
     return driver
 
-#  --------------------------------------------------
-# def get_listings():
-#     urls, _ = get_target_listings("https://www.fydafreightliner.com/commercial-trucks-vans-for-sale-ky-oh-pa--xNewInventory#page=xNewInventory&vc=sleeper")
-#     return urls
-
-# --------------------------------------------------
 
 # ----------------- Scrape FYDA listings -----------------
 def get_all_fyda_listings():
@@ -116,70 +105,7 @@ def get_all_fyda_listings():
     return list(all_urls)
 # ----------------------------------------------------------------------------------
 
-# Download & watermark images
-# --------------------------------------------------
-# def download_fyda_images(url, dest, stock_number, watermark_func=None):
-#     """
-#     Download all vehicle images into a subfolder named by stock_number.
-#     Optionally apply a watermark function to each image.
-#     Returns a list of downloaded image paths.
-#     """
-#     driver = get_driver()
-#     # Create subfolder for this vehicle
-#     vehicle_folder = os.path.join(dest, str(stock_number))
-#     os.makedirs(vehicle_folder, exist_ok=True)
-#     urls = []
-
-#     try:
-#         # Load vehicle page
-#         driver.get(url)
-#         time.sleep(5)
-
-#         # Collect URLs from div.background-image (if any)
-#         for div in driver.find_elements(By.CSS_SELECTOR, "div.background-image"):
-#             s = div.get_attribute("style")
-#             m = re.search(r'url\((.*?)\)', s)
-#             if m:
-#                 urls.append(m.group(1).strip('"\''))
-
-#         # Collect image src values from gallery and general <img> tags
-#         for img in driver.find_elements(By.CSS_SELECTOR, "div.galleryImages img") + driver.find_elements(By.TAG_NAME, "img"):
-#             src = img.get_attribute("src")
-#             if src and "inventory" in src:
-#                 urls.append(src)
-
-#         # Remove duplicates
-#         urls = sorted(set(urls))
-#         print(f"Found {len(urls)} images for {url}")
-
-#         # Download all found image URLs
-#         paths = []
-#         for i, u in enumerate(urls, 1):
-#             ext = os.path.splitext(u.split("?", 1)[0])[1] or ".jpg"
-#             fname = f"{stock_number}_{i}{ext}"
-#             fpath = os.path.join(vehicle_folder, fname)
-#             try:
-#                 r = requests.get(u, timeout=10)
-#                 r.raise_for_status()
-#                 with open(fpath, "wb") as f:
-#                     f.write(r.content)
-#                 print(f"Downloaded {u} -> {fpath}")
-#                 # Optionally watermark
-#                 if watermark_func:
-#                     watermarked = os.path.join(vehicle_folder, f"{stock_number}_{i}_wm{ext}")
-#                     watermark_func(fpath, watermarked)
-#                     print(f"Watermarked {watermarked}")
-#                 paths.append(fpath)
-#             except Exception as e:
-#                 print(f"Failed to download {u}: {e}")
-
-#         return paths
-
-#     finally:
-#         driver.quit()
-        
 #         # original code 
-
 # --------------------------------------------------
 # 1) Extract JSON from text
 def extract_json(text):
@@ -1038,8 +964,6 @@ def run(url, filename, filename2, imagefolder):
         print(f"Error processing {url}: {str(e)}")
 
 #  original code
-# mylistings = get_listings()
-
 def process_vehicle_data(vehicle_info_path, diagram_data_path, vehicle_info_org_path, mylistings):
     # Create single output directory
     output_dir = "myresults"

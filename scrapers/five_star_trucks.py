@@ -19,6 +19,7 @@ import io
 import cairosvg
 
 from core.output_fields import vehicle_attributes, diagram_attributes
+from core.image_utils import extract_image_urls_from_page, download_images, watermark_images
 
 
 # Set this to True if you want to download images, or False to skip
@@ -50,7 +51,6 @@ def extract_json(text):
             return None
     return None
 
-
 # original function
 # ── Coerce fields to “compliant” values ────────────────────────────────
 def find_most_relevant_option(input_value, options):
@@ -65,7 +65,6 @@ def find_most_relevant_option(input_value, options):
             best_match = option
 
     return best_match
-
 
 
 # original function
@@ -428,7 +427,6 @@ def make_extracted_info_compliant(extracted_info):
 
     return compliant_info
 
-
 # original function
 # ── (E) 5) Build diagram info ───────────────────────────────────────────────────
 def complete_diagram_info(diagram_info, compliant_info):
@@ -592,7 +590,6 @@ def complete_diagram_info(diagram_info, compliant_info):
 
     return ''
 
-
 # original function
 # ── (A) 2) Get all listing URLs from a CSV file ─────────────────────────────────
 # ── (B) 2) Fetch raw page HTML / text ──────────────────────────────────────────
@@ -689,7 +686,6 @@ def get_vehicle_page_html(url):
         print(f"Traceback: {traceback.format_exc()}")
         return None
 
-
 # original function
 # ── (C) 3) Use OpenAI to extract JSON info ─────────────────────────────────────
 def extract_vehicle_info(text):
@@ -759,178 +755,6 @@ The field ""Unique id"" should always be empty.
         return None
 
 
-# original function
-def add_watermark(image_path, watermark_path, output_path, scale_factor=0.4, padding=60, opacity=0.35):
-    try:
-        # Check if the file exists and has content
-        if not os.path.exists(image_path):
-            raise FileNotFoundError(f"Input file does not exist: {image_path}")
-
-        if os.path.getsize(image_path) == 0:
-            raise ValueError(f"Input file is empty: {image_path}")
-        # Load the base image and convert to RGBA
-        base_image = Image.open(image_path)
-        if base_image.format in ['WEBP', 'AVIF'] and base_image.mode != 'RGBA':
-            base_image = base_image.convert('RGBA')
-        elif base_image.mode != 'RGBA':
-            base_image = base_image.convert('RGBA')
-
-        # Handle watermark based on file type
-        if watermark_path.lower().endswith('.svg'):
-            svg_data = cairosvg.svg2png(url=watermark_path)
-            watermark = Image.open(io.BytesIO(svg_data)).convert("RGBA")
-        else:
-            watermark = Image.open(watermark_path).convert("RGBA")
-
-        # Resize watermark
-        new_wm_width = int(base_image.width * scale_factor)
-        new_wm_height = int(new_wm_width * watermark.height / watermark.width)
-        watermark = watermark.resize((new_wm_width, new_wm_height), Resampling.LANCZOS)
-
-        # Apply transparency to the watermark
-        watermark_with_opacity = Image.new('RGBA', watermark.size, (0, 0, 0, 0))
-        for x in range(watermark.width):
-            for y in range(watermark.height):
-                r, g, b, a = watermark.getpixel((x, y))
-                # Multiply the alpha channel by the opacity factor
-                watermark_with_opacity.putpixel((x, y), (r, g, b, int(a * opacity)))
-
-        # Position watermark
-        pos = (
-            padding,
-            base_image.height - watermark_with_opacity.height - padding
-        )
-
-        # Create new image for composition
-        final_image = Image.new('RGBA', base_image.size, (0, 0, 0, 0))
-        final_image.paste(base_image, (0, 0))
-        final_image.paste(watermark_with_opacity, pos, watermark_with_opacity)
-
-        # Convert and save based on output format
-        output_ext = os.path.splitext(output_path)[1].lower()
-        if output_ext == '.webp':
-            final_image.save(output_path, 'WEBP', lossless=True, quality=90)
-        elif output_ext == '.avif':
-            # Save as AVIF with quality setting
-            final_image.save(output_path, 'AVIF', quality=90)
-        else:
-            final_image = final_image.convert("RGB")
-            final_image.save(output_path)
-
-        return output_path
-    except Exception as e:
-        # More detailed error message with file information
-        raise Exception(f"Error processing image: {str(e)}\nFile: {image_path}\nFormat: {os.path.splitext(image_path)[1]}")
-
-# original function
-# ── (F) 6) Add watermark to images in a folder ───────────────────────────────────
-def process_folder_watermark(input_folder, output_folder, watermark_path, scale_factor=0.60, padding=70, opacity=0.35):
-    if not os.path.exists(output_folder):
-        os.makedirs(output_folder)
-
-    # Print Pillow version for debugging
-    print(f"Pillow version: {Image.__version__}")
-    # Check if pillow_avif is loaded
-    try:
-        import pillow_avif
-        print("pillow-avif-plugin is loaded")
-    except ImportError:
-        print("WARNING: pillow-avif-plugin is not loaded properly")
-
-    supported_formats = ('.png', '.jpg', '.jpeg', '.bmp', '.tiff', '.webp', '.avif')
-
-    for filename in os.listdir(input_folder):
-        if filename.lower().endswith(supported_formats):
-            input_path = os.path.join(input_folder, filename)
-            output_path = os.path.join(output_folder, filename)
-
-            try:
-                add_watermark(input_path, watermark_path, output_path, scale_factor, padding, opacity)
-                print(f"Processed: {filename}")
-            except Exception as e:
-                print(f"Error processing {filename}: {str(e)}")
-
-# original function
-# ── (F) 6) Download gallery images ───────────────────────────────────────────────
-def download_gallery_images(url, folder_name):
-    os.makedirs(folder_name, exist_ok=True)
-
-    # Use a more browser-like User-Agent, just in case
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                      "AppleWebKit/537.36 (KHTML, like Gecko) "
-                      "Chrome/106.0.0.0 Safari/537.36"
-    }
-    response = requests.get(url, headers=headers)
-    response.raise_for_status()
-
-    soup = BeautifulSoup(response.text, 'html.parser')
-
-    # This finds *all* anchors with classes:
-    #   e-gallery-item
-    #   elementor-gallery-item
-    # The order in the results will typically match the order in the HTML
-    gallery_links = soup.select('a.e-gallery-item.elementor-gallery-item')
-
-    print(f'Found {len(gallery_links)} gallery image links.')
-    if not gallery_links:
-        print("No gallery links found. Maybe it's loaded by JavaScript, or has changed markup.")
-        return
-
-    for idx, a_tag in enumerate(gallery_links, start=1):
-        img_url = a_tag.get('href')
-        if not img_url:
-            continue
-
-        # Convert relative URL to absolute
-        img_url = urljoin(url, img_url)
-
-        # Download the linked image
-        try:
-            resp_img = requests.get(img_url, headers=headers)
-            resp_img.raise_for_status()
-
-            # Extract extension, e.g. ".webp"
-            _, ext = os.path.splitext(img_url)
-            # default to .jpg if none found
-            if not ext:
-                ext = ".jpg"
-
-            filename = os.path.join(folder_name, f"{idx}{ext}")
-            with open(filename, 'wb') as f:
-                f.write(resp_img.content)
-
-            print(f"Downloaded {filename} from {img_url}")
-        except Exception as e:
-            print(f"Error downloading {img_url}: {e}")
-
-    print("Done downloading all gallery images!")
-
-
-# original function
-# ── Helper function to write JSON to CSV ────────────────────────────────────────
-# ── (A) 1) Get all listing URLs ────────────────────────────────────────────────
-# def get_listings():
-#     url = "https://www.5startrucksales.us/semi-trucks/"
-#     headers = {'User-Agent': 'Mozilla/5.0'}
-
-#     try:
-#         response = requests.get(url, headers=headers, verify=False) # verify=False to ignore SSL warnings,   i added this to avoid SSL errors 
-#         response.raise_for_status()
-
-#         soup = BeautifulSoup(response.text, 'html.parser')
-#         links = soup.find_all('a', href=True)
-
-#         truck_links = [link['href'] for link in links
-#                       if link['href'].startswith('https://www.5startrucksales.us/trucks')]
-
-#         return truck_links
-
-#     except Exception as e:
-#         print(f"Error: {e}")
-#         return []
-
-
 def get_listings():
     """
     Step 1: Try using Bright Data proxy from environment variables.
@@ -942,10 +766,14 @@ def get_listings():
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
     }
     # Set up proxies from env (.env loaded by dotenv or ECS task env)
-    proxy_host = os.environ.get("BRIGHTDATA_PROXY_HOST")
-    proxy_port = os.environ.get("BRIGHTDATA_PROXY_PORT")
-    proxy_user = os.environ.get("BRIGHTDATA_PROXY_USER")
-    proxy_pass = os.environ.get("BRIGHTDATA_PROXY_PASS")
+    # proxy_host = os.environ.get("BRIGHTDATA_PROXY_HOST")
+    # proxy_port = os.environ.get("BRIGHTDATA_PROXY_PORT")
+    # proxy_user = os.environ.get("BRIGHTDATA_PROXY_USER")
+    # proxy_pass = os.environ.get("BRIGHTDATA_PROXY_PASS")
+    proxy_host = os.getenv('BRIGHTDATA_FIVESTAR_PROXY_HOST', 'brd.superproxy.io')
+    proxy_port = os.getenv('BRIGHTDATA_FIVESTAR_PROXY_PORT', '33335')
+    proxy_user = os.getenv('BRIGHTDATA_FIVESTAR_PROXY_USER')
+    proxy_pass = os.getenv('BRIGHTDATA_FIVESTAR_PROXY_PASS')
     use_proxy = all([proxy_host, proxy_port, proxy_user, proxy_pass])
     links = []
 
@@ -955,6 +783,16 @@ def get_listings():
             "http": f"http://{proxy_user}:{proxy_pass}@{proxy_host}:{proxy_port}",
             "https": f"http://{proxy_user}:{proxy_pass}@{proxy_host}:{proxy_port}",
         }
+        print(f"[five_star][proxy] Using proxy settings:")
+        # print(f"  BRIGHTDATA_PROXY_USER = {proxy_user}")
+        print(f"  BRIGHTDATA_FIVESTAR_PROXY_USER = {proxy_user}")
+        # print(f"  BRIGHTDATA_PROXY_PASS = {'SET' if proxy_pass else 'NOT SET'}")
+        print(f"  BRIGHTDATA_FIVESTAR_PROXY_PASS = {'SET' if proxy_pass else 'NOT SET'}")
+        # print(f"  BRIGHTDATA_PROXY_HOST = {proxy_host}")
+        print(f"  BRIGHTDATA_FIVESTAR_PROXY_HOST = {proxy_host}")
+        # print(f"  BRIGHTDATA_PROXY_PORT = {proxy_port}")
+        print(f"  BRIGHTDATA_FIVESTAR_PROXY_PORT = {proxy_port}")
+
         print("[five_star][proxy] Trying Bright Data proxy first.")
         try:
             response = requests.get(url, headers=headers, proxies=proxies, timeout=45, verify=False)
@@ -1000,7 +838,6 @@ def get_listings():
 # - Writes debug HTML for both attempts to results/ for later inspection
 # - Clearly logs which path is running for easy debugging
 # - You can swap proxy zone in .env to test new zones without code change
-
 
 
 # original function
@@ -1076,82 +913,69 @@ def get_single_condition_listings(condition='used'):
     return list(all_listings)
 
 
-
-
-
-# ── (H) 8) run() orchestrator ───────────────────────────────────────────────────
 def run(url, filename, filename2, imagefolder):
+    """
+    Robust run function for five_star, using core.image_utils.
+    - Skips listings with HTTP errors or extraction failures.
+    - Logs which listings failed and continues with the rest.
+    - Always checks/creates output folders.
+    - Handles image download/watermark errors gracefully.
+    - Uses only shared utils for all image logic!
+    """
+    # Step 1: Fetch raw text
     vehicle_text = get_vehicle_page_html(url)
-    print(vehicle_text)
+    if not vehicle_text:
+        print(f"[five_star][run] No text for {url}; skipping this listing.")
+        return
+
+    # Step 2: Extract info with OpenAI
     extracted_info = extract_vehicle_info(vehicle_text)
+    if not isinstance(extracted_info, dict):
+        print(f"[five_star][run] Extraction returned non‐dict for {url}; skipping.")
+        return
 
-    # Ensure extracted_info is a dictionary before assigning
-    if isinstance(extracted_info, dict):
-        extracted_info["Original info description"] = vehicle_text
-        print("\nExtracted Vehicle Information:")
-        print("-----------------------------")
-        print(json.dumps(extracted_info, indent=2))
+    extracted_info["Original info description"] = vehicle_text
+    compliant_info = make_extracted_info_compliant(extracted_info)
 
-        compliant_info = make_extracted_info_compliant(extracted_info)
-        print("\nCompliant Vehicle Information:")
-        print("-----------------------------")
-        print(json.dumps(compliant_info, indent=2))
+    # Step 3: Ensure output folders exist
+    os.makedirs(os.path.dirname(filename), exist_ok=True)
+    os.makedirs(os.path.dirname(filename2), exist_ok=True)
+    os.makedirs(imagefolder, exist_ok=True)
 
-        # attributes = [
-        #     "Company Address", "ECM Miles", "Engine Displacement", "Engine Horsepower", "Engine Hours",
-        #     "Engine Model", "Engine Serial Number", "Engine Torque", "Front Axle Capacity", "Fuel Capacity",
-        #     "glider", "Listing", "Location", "Not Active", "Odometer Miles", "OS - Axle Configuration",
-        #     "OS - Brake System Type", "OS - Engine Make", "OS - Fifth Wheel Type", "OS - Front Suspension Type",
-        #     "OS - Fuel Type", "OS - Number of Front Axles", "OS - Number of Fuel Tanks", "OS - Number of Rear Axles",
-        #     "OS - Rear Suspension Type", "OS - Sleeper or Day Cab", "OS - Transmission Make", "OS - Transmission Speeds",
-        #     "OS - Transmission Type", "OS - Vehicle Class", "OS - Vehicle Condition", "OS - Vehicle Make",
-        #     "OS - Vehicle Make Logo", "OS - Vehicle Type", "OS - Vehicle Year", "Rear Axle Capacity", "Rear Axle Ratio",
-        #     "Ref Number", "Stock Number", "Transmission Model", "U.S. State", "U.S. State (text)", "Vehicle model - new",
-        #     "Vehicle Price", "Vehicle Year", "VehicleVIN", "Wheelbase", "Original info description", "original_image_url"
-        # ]
+    # Step 4: Write “vehicle” CSV row
+    compliant_info["original_image_url"] = url
+    compliant_info["dealerName"] = "five_star"
+    write_to_csv([compliant_info], vehicle_attributes, filename)
 
-        compliant_info["original_image_url"] = url
-        compliant_info["dealerName"] = "five_star"
-        write_to_csv([compliant_info], vehicle_attributes, filename)
+    # Step 5: Write “diagram” CSV row
+    diagram_info = {}
+    diagram_info["Listing"] = url
+    diagram_info["original_image_url"] = url
+    diagram_info2 = complete_diagram_info(diagram_info, compliant_info)
+    if not diagram_info2:
+        diagram_info2 = {}
+    write_to_csv([diagram_info2], diagram_attributes, filename2)
 
-        print('AAAAAAAAAaaaaaaa')
+    # Step 6: Download & watermark images (using core utils)
+    stock = str(compliant_info.get("Stock Number", "")).strip()
+    if stock:
+        target_folder = os.path.join(imagefolder, stock)
+        os.makedirs(target_folder, exist_ok=True)
 
-        # --- Diagram Info Section ---
-        diagram_info = {}
-        diagram_info["Listing"] = url   # Required primary key/URL for diagram row
-        diagram_info["original_image_url"] = url
-
-        # attributes2 = [
-        #     "Listing", "R1 Brake Type", "R1 Dual Tires", "R1 Lift Axle", "R1 Power Axle", "R1 Steer Axle", "R1 Tire Size",
-        #     "R1 Wheel Material", "R2 Brake Type", "R2 Dual Tires", "R2 Lift Axle", "R2 Power Axle", "R2 Steer Axle",
-        #     "R2 Tire Size", "R2 Wheel Material", "R3 Brake Type", "R3 Dual Tires", "R3 Lift Axle", "R3 Power Axle",
-        #     "R3 Steer Axle", "R3 Tire Size", "R3 Wheel Material", "R4 Brake Type", "R4 Dual Tires", "R4 Lift Axle",
-        #     "R4 Power Axle", "R4 Steer Axle", "R4 Tire Size", "R4 Wheel Material", "F5 Brake Type", "F5 Dual Tires",
-        #     "F5 Lift Axle", "F5 Power Axle", "F5 Steer Axle", "F5 Tire Size", "F5 Wheel Material", "F6 Brake Type",
-        #     "F6 Dual Tires", "F6 Lift Axle", "F6 Power Axle", "F6 Steer Axle", "F6 Tire Size", "F6 Wheel Material",
-        #     "F7 Brake Type", "F7 Dual Tires", "F7 Lift Axle", "F7 Power Axle", "F7 Steer Axle", "F7 Tire Size",
-        #     "F7 Wheel Material", "F8 Brake Type", "F8 Dual Tires", "F8 Lift Axle", "F8 Power Axle", "F8 Steer Axle",
-        #     "F8 Tire Size", "F8 Wheel Material", "original_image_url"
-        # ]
-
-        diagram_info2 = complete_diagram_info(diagram_info, compliant_info)
-        print('diagram_info before writing2')
-        print(diagram_info2)
-        print("diagram_attributes")
-        print(diagram_attributes)
-
-        # --- Always Write Diagram CSV! ---
-        write_to_csv([diagram_info2], diagram_attributes, filename2)
-
-        # --- Image Processing ---
-        path1 = os.path.join(imagefolder, compliant_info['Stock Number'])
-        os.makedirs(path1, exist_ok=True)
-        download_gallery_images(url, path1)
-
-        process_folder_watermark(path1, path1 + '-watermarked', WATERMARK_PATH, scale_factor=0.4, padding=60)
+        try:
+            image_urls = extract_image_urls_from_page(url, dealer="five_star")
+            if not image_urls:
+                print(f"[five_star][run] No image URLs found for {url}")
+            else:
+                downloaded_paths = download_images(image_urls, target_folder, dealer="five_star")
+                watermark_path = os.path.join("data", "raw", "group.png")
+                watermarked_folder = f"{target_folder}-watermarked"
+                watermark_images(downloaded_paths, watermarked_folder, watermark_path)
+        except Exception as e:
+            print(f"[five_star][run] Error downloading or watermarking images for {url}: {e}")
     else:
-        print("No valid information extracted")
-        print("Skipping CSV writing due to extraction failure")
+        print(f"[five_star][run] No Stock Number for {url}; skipping images.")
+
 
 # original function
 # # ── (I) 9) Process vehicle data ─────────────────────────────────────────────────
@@ -1432,28 +1256,26 @@ def reorder_and_save_results(vehicle_data, diagram_data, out_vinf, out_ddata):
     print(f"Successfully wrote reordered data to {out_ddata}")
 
 
-
 if __name__ == "__main__":
     listings = get_listings()
-    print('I should be processing ', len(listings), ' listins')
+    print('I should be processing ', len(listings), ' listings')
     mylistings = listings
     n = 0
+    os.makedirs('results', exist_ok=True)
+    imagefolder = 'results/images'
+    os.makedirs(imagefolder, exist_ok=True)
     for listing in mylistings:
         n += 1
-        print('I am processing ', listing)
-        os.makedirs('results', exist_ok=True)
-        imagefolder = 'results/images'
-        run(listing, 'results/vehicleinfo.csv', 'results/diagram.csv', imagefolder)
-        print('*********************************************************************')
-        print('*********************************************************************')
-        print('*********************************************************************')
+        print(f'I am processing {listing}')
+        try:
+            run(listing, 'results/vehicleinfo.csv', 'results/diagram.csv', imagefolder)
+        except Exception as e:
+            print('*********************************************************************')
+            print(f'[five_star][ERROR] Failed to process listing {listing}: {e}')
+            print('*********************************************************************')
         print('*********************************************************************')
         print('*********************************************************************')
         print('listing ', n, ' over ', len(mylistings))
         print('*********************************************************************')
         print('*********************************************************************')
-        print('*********************************************************************')
-        print('*********************************************************************')
-        print('*********************************************************************')
-
 

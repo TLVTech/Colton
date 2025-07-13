@@ -12,10 +12,11 @@ os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # Read bucket and scraper from env variables (set by deploy.sh or ECS taskdef)
 S3_BUCKET = os.environ.get('S3_BUCKET', 'colton-bucket-prod')
 SCRAPER_NAME = os.environ.get('SCRAPER_NAME', None)
-
+print(f'scraper name is {SCRAPER_NAME}')
 if not SCRAPER_NAME:
     print("!! SCRAPER_NAME env var is not set. Exiting.")
     sys.exit(1)
+
 
 def run_scraper(scraper_name):
     """Run a single scraper using run_scraper CLI."""
